@@ -118,7 +118,7 @@ def search_ebay(query, price_range=None, condition_filter=None):
 
     # Filters
     filter_list = ["buyingOptions:{FIXED_PRICE}"]
-
+ 
     if price_range:
         currency = 'USD'
         filter_list.append(f"price:[{price_range}],priceCurrency:{currency}")
