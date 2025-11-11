@@ -6,14 +6,14 @@ import configparser
 import os 
 
 
-# 1. Load configuration from file
-CONFIG_FILE = 'EbayAPI/ebay_config.ini'
+# 1. Load configuration from unified config file
+CONFIG_FILE = 'config.ini'
 config = configparser.ConfigParser()
 
 # Check if the config file exists before trying to read it
 if not os.path.exists(CONFIG_FILE):
     print(f"ERROR: Configuration file '{CONFIG_FILE}' not found.")
-    print("Please create this file and add your CLIENT_ID and CLIENT_SECRET under the [ebay] section.")
+    print("Please create this file and add your credentials under the [ebay] and [amazon] sections.")
     exit(1)
 
 config.read(CONFIG_FILE)
@@ -25,9 +25,11 @@ try:
     MARKETPLACE_ID = 'EBAY_US'
 except configparser.NoSectionError:
     print(f"ERROR: No '[ebay]' section found in '{CONFIG_FILE}'.")
+    print("Please ensure config.ini has an [ebay] section with CLIENT_ID and CLIENT_SECRET.")
     exit(1)
 except configparser.NoOptionError as e:
     print(f"ERROR: Missing required option {e} in the [ebay] section of '{CONFIG_FILE}'.")
+    print("Please add CLIENT_ID and CLIENT_SECRET to the [ebay] section.")
     exit(1)
 
 # API Endpoints
@@ -186,26 +188,15 @@ def display_results(data):
 
     return {"found_items_count": len(items_data), "items": items_data}
 
-# 5. Modular Function Call (New Primary User Function)
+# 5. User facing function to run the search
 def run_search(query, min_price=None, max_price=None, condition=None, output_file="output.json"):
     """
     Primary user-facing function to execute a search and return the results as a JSON string.
-    
-    ================================================================================
-    REQUIRED INPUT:
-    - query (str): The search keyword (e.g., "spiderman toys").
-    
-    OPTIONAL INPUTS:
-    - min_price (str/float/None): The minimum price for the search.
-    - max_price (str/float/None): The maximum price for the search.
-    - condition (str/None): Comma-separated list of conditions (e.g., "NEW, USED").
-    - output_file (str): The name of the file to save the output JSON (default: "output.json").
-    ================================================================================
     """
     print("--- Starting eBay Search ---")
     
     if not query:
-        raise ValueError("The 'query' parameter is required.")
+        raise ValueError("A product search name is required.")
     
     # Check for token validity
     if not get_access_token():
@@ -226,5 +217,9 @@ def run_search(query, min_price=None, max_price=None, condition=None, output_fil
         with open(output_file, "w", encoding="utf-8") as json_file:
             json.dump(results, json_file, indent=4)
         print(f"Search results saved to {output_file}")
+        
+        # Return formatted results
+        formatted_output = display_results(results)
+        return json.dumps(formatted_output, indent=4)
     else:
         return json.dumps({"status": "error", "message": "Search failed or returned no data."}, indent=4)
