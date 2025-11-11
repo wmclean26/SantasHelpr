@@ -35,9 +35,12 @@ def search_amazon(query, min_price=None, max_price=None, sort_by="", page="1", g
     querystring = {
         "query": query,
         "page": page,
-        "geo": geo,
-        "sort_by": sort_by
+        "geo": geo
     }
+    
+    # Add sort_by only if provided
+    if sort_by:
+        querystring["sort_by"] = sort_by
     
     # Add price filters if provided
     if min_price is not None:
