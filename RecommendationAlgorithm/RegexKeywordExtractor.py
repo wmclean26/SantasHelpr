@@ -1,6 +1,5 @@
 import re
 
-
 def extract_basic_info(query):
     info = {}
 
@@ -39,7 +38,6 @@ def extract_basic_info(query):
             break
 
     return info
-
 
 # Test
 query = "I need to find a gift for my 10 year old niece under 15 dollars"
