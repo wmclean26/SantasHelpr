@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santa's Helpr</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Santa's Helpr</h1>
+        
+        <!-- Search Filters -->
+        <div class="search-section">
+            <h2>Search Filters</h2>
+            
+            <div class="filter-grid">
+                <!-- Row 1: Product and Price -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Product:</label>
+                        <input type="text" id="product" value="Lego star wars" />
+                    </div>
+                    <div class="filter-group">
+                        <label>Min $:</label>
+                        <input type="number" id="min_price" value="30" />
+                    </div>
+                    <div class="filter-group">
+                        <label>Max $:</label>
+                        <input type="number" id="max_price" value="100" />
+                    </div>
+                </div>
+                
+                <!-- Row 2: Condition and Sort -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Condition:</label>
+                        <select id="condition">
+                            <option value="NEW|USED" selected>NEW|USED</option>
+                            <option value="NEW">NEW</option>
+                            <option value="USED">USED</option>
+                            <option value="CERTIFIED_REFURBISHED">CERTIFIED_REFURBISHED</option>
+                            <option value="SELLER_REFURBISHED">SELLER_REFURBISHED</option>
+                            <option value="NEW|CERTIFIED_REFURBISHED">NEW|CERTIFIED_REFURBISHED</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>eBay Sort:</label>
+                        <select id="sort_by">
+                            <option value="price" selected>Price: Low to High</option>
+                            <option value="-price">Price: High to Low</option>
+                            <option value="newlyListed">Newly Listed</option>
+                            <option value="distance">Distance</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Row 3: Delivery Location -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Delivery Country:</label>
+                        <select id="country">
+                            <option value="US" selected>United States</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="CA">Canada</option>
+                            <option value="AU">Australia</option>
+                            <option value="DE">Germany</option>
+                            <option value="FR">France</option>
+                            <option value="IT">Italy</option>
+                            <option value="ES">Spain</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>ZIP/Postal Code:</label>
+                        <input type="text" id="postal" placeholder="Optional" />
+                    </div>
+                </div>
+                
+                <!-- Row 4: Shipping Options -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Max Shipping $:</label>
+                        <input type="number" id="max_shipping" placeholder="Optional" />
+                    </div>
+                    <div class="filter-group">
+                        <label>Guaranteed Delivery (days):</label>
+                        <input type="number" id="delivery_days" placeholder="Optional" />
+                    </div>
+                </div>
+                
+                <!-- Row 5: Amazon Sort -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Amazon Sort:</label>
+                        <select id="amazon_sort">
+                            <option value="RELEVANCE" selected>Relevance</option>
+                            <option value="LOW_HIGH_PRICE">Price: Low to High</option>
+                            <option value="HIGH_LOW_PRICE">Price: High to Low</option>
+                            <option value="REVIEWS">Reviews</option>
+                            <option value="BEST_SELLERS">Best Sellers</option>
+                            <option value="NEWEST">Newest</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="searchBtn" class="search-btn">🔍 Search Both</button>
+        </div>
+        
+        <!-- Loading Spinner -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Searching eBay and Amazon...</p>
+        </div>
+        
+        <!-- Status Message -->
+        <div id="status" class="status"></div>
+        
+        <!-- Results Section -->
+        <div id="results" class="results-section"></div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
