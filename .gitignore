@@ -1,0 +1,16 @@
+# Ignore Python cache and virtual env files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment and config files with secrets
+.env
+chat_config.ini
+
+# Ignore IDE/project files
+.vscode/
+.idea/
+
+# Ignore OS junk files
+.DS_Store
+Thumbs.db
