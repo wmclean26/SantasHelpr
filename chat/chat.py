@@ -28,7 +28,7 @@ except Exception as e:
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 # --- Gift idea function ---
-def get_similar_gift_ideas(gift_name: str, num_ideas: int = 5):
+def get_similar_gift_ideas(gift_name: str, num_ideas: int = 2):
     """
     Returns short, thematically similar gift ideas.
     Example: 'Power Rangers' -> ['GI Joe', 'Transformers', 'He-Man', 'TMNT', 'Voltron']
