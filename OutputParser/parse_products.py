@@ -1,6 +1,5 @@
-
 import json
-import argparse
+from datetime import datetime
 
 def parse_price(price_str):
     """Cleans and converts a price string to a float."""
@@ -14,19 +13,17 @@ def parse_price(price_str):
         return float(price_str)
     return 0.0
 
-def calculate_quality_score(item):
-    """Calculates a normalized quality score for an item."""
-    if item['source'] == 'eBay':
-        # eBay: 'New' is 1.0, 'Used' is 0.5, otherwise 0.0
-        condition = item.get('condition', '').lower()
+def quality_score(product):
+    """Calculates a normalized quality score for a product (0.0 to 1.0)."""
+    if product['source'] == 'eBay':
+        condition = product.get('condition', '').lower()
         if 'new' in condition:
             return 1.0
         elif 'used' in condition:
             return 0.5
         return 0.0
-    elif item['source'] == 'Amazon':
-        # Amazon: Normalize star rating (assuming 5-star max)
-        rating_str = item.get('star_rating')
+    elif product['source'] == 'Amazon':
+        rating_str = product.get('star_rating')
         if rating_str:
             try:
                 rating = float(rating_str)
@@ -36,98 +33,129 @@ def calculate_quality_score(item):
         return 0.0
     return 0.0
 
-def get_top_products(file_path, sort_by='price', top_n=3, best_deal=False):
+def compare(json_data, sort_by):
     """
-    Parses a JSON file, gets top N from eBay and Amazon, combines them,
-    and sorts by the specified key.
+    Compare and sort products from JSON data.
+    
+    Args:
+        json_data: Dict containing ebay and amazon product data
+        sort_by: String - 'price', 'delivery', or 'quality'
+    
+    Returns:
+        List of top 3 products based on sort criteria
     """
-    with open(file_path, 'r') as f:
-        data = json.load(f)
+    all_products = []
 
-    ebay_products = []
-    if 'ebay' in data and 'items' in data['ebay']:
-        for item in data['ebay']['items']:
+    # Process eBay products
+    if 'ebay' in json_data and 'items' in json_data['ebay']:
+        for item in json_data['ebay']['items']:
+            shipping_info = item.get('shippingOptions', [])
+            delivery_info = shipping_info[0] if shipping_info else None
+            
+            # Extract min delivery date (ignore time)
+            min_delivery_date = None
+            if delivery_info and 'minDelivery' in delivery_info:
+                try:
+                    min_delivery_str = delivery_info['minDelivery']
+                    min_delivery_date = datetime.fromisoformat(min_delivery_str.replace('Z', '+00:00')).date()
+                except:
+                    pass
+            
             product_info = {
                 'source': 'eBay',
                 'title': item.get('title'),
                 'price': parse_price(item.get('price')),
                 'condition': item.get('condition'),
-                'url': item.get('link'),
+                'url': item.get('url'),
+                'min_delivery_date': min_delivery_date
             }
-            product_info['quality_score'] = calculate_quality_score(product_info)
-            ebay_products.append(product_info)
+            all_products.append(product_info)
 
-    amazon_products = []
-    if 'amazon' in data and 'products' in data['amazon']:
-        for product in data['amazon']['products']:
+    # Process Amazon products
+    if 'amazon' in json_data and 'amazon_products' in json_data['amazon']:
+        for product in json_data['amazon']['amazon_products']:
+            delivery_info = product.get('product_delivery_info')
+            
+            # Extract min delivery date (ignore time)
+            min_delivery_date = None
+            if delivery_info and 'minDelivery' in delivery_info:
+                try:
+                    min_delivery_str = delivery_info['minDelivery']
+                    min_delivery_date = datetime.strptime(min_delivery_str, '%Y-%m-%d').date()
+                except:
+                    pass
+            
             product_info = {
                 'source': 'Amazon',
                 'title': product.get('product_title'),
                 'price': parse_price(product.get('product_price')),
                 'star_rating': product.get('product_star_rating'),
                 'url': product.get('product_url'),
-                'image': product.get('product_photo')
+                'image': product.get('product_photo'),
+                'min_delivery_date': min_delivery_date
             }
-            product_info['quality_score'] = calculate_quality_score(product_info)
-            amazon_products.append(product_info)
+            all_products.append(product_info)
 
-    # Get top N from each source based on price (lowest first)
-    top_ebay = sorted(ebay_products, key=lambda x: x['price'])[:top_n]
-    top_amazon = sorted(amazon_products, key=lambda x: x['price'])[:top_n]
+    # Sort based on sort_by parameter
+    if sort_by == 'price':
+        # Sort by lowest price
+        all_products.sort(key=lambda x: x['price'])
+    elif sort_by == 'delivery':
+        # Sort by earliest delivery date (None values go to end)
+        all_products.sort(key=lambda x: (x['min_delivery_date'] is None, x['min_delivery_date']))
+    elif sort_by == 'quality':
+        # Calculate quality scores and sort
+        for product in all_products:
+            product['quality_score'] = quality_score(product)
+        all_products.sort(key=lambda x: x['quality_score'], reverse=True)
+    
+    # Ensure at least one from each source (eBay and Amazon)
+    final_list = []
+    ebay_added = False
+    amazon_added = False
+    
+    # First pass: add at least one from each source
+    for product in all_products:
+        if len(final_list) >= 3:
+            break
+        if product['source'] == 'eBay' and not ebay_added:
+            final_list.append(product)
+            ebay_added = True
+        elif product['source'] == 'Amazon' and not amazon_added:
+            final_list.append(product)
+            amazon_added = True
+    
+    # Second pass: fill remaining slots
+    for product in all_products:
+        if len(final_list) >= 3:
+            break
+        if product not in final_list:
+            final_list.append(product)
+    
+    # Convert dates to strings for JSON serialization
+    for product in final_list:
+        if product.get('min_delivery_date'):
+            product['min_delivery_date'] = str(product['min_delivery_date'])
+    
+    # Return top 3
+    return final_list
 
-    combined_products = top_ebay + top_amazon
-
-    if best_deal:
-        # Calculate value score for the combined list
-        max_price = max(p['price'] for p in combined_products if p['price'] > 0) or 1.0
-        for product in combined_products:
-            normalized_price = product['price'] / max_price if max_price > 0 else 0
-            product['value_score'] = product['quality_score'] - normalized_price
-
-        # Sort by value score
-        combined_products.sort(key=lambda x: x['value_score'], reverse=True)
-
-        # Ensure at least one from each vendor
-        final_list = []
-        ebay_added = False
-        amazon_added = False
-        for product in combined_products:
-            if len(final_list) < top_n:
-                if product['source'] == 'eBay' and not ebay_added:
-                    final_list.append(product)
-                    ebay_added = True
-                elif product['source'] == 'Amazon' and not amazon_added:
-                    final_list.append(product)
-                    amazon_added = True
-        
-        for product in combined_products:
-            if len(final_list) < top_n and product not in final_list:
-                final_list.append(product)
-
-        for product in final_list:
-            if 'value_score' in product:
-                del product['value_score']
-        
-        return final_list
-
-
-    # Sort the combined list based on the user's choice
-    if sort_by == 'quality':
-        # Sort by quality score, descending
-        combined_products.sort(key=lambda x: x['quality_score'], reverse=True)
-    else: # Default to sorting by price
-        # Sort by price, ascending (lowest first)
-        combined_products.sort(key=lambda x: x['price'])
-    return combined_products[:top_n]
+def main():
+    """Main function to load JSON and compare products."""
+    # Load JSON from file
+    with open('test.json', 'r') as f:
+        json_data = json.load(f)
+    
+    # You can change sort_by to 'price', 'delivery', or 'quality'
+    sort_by = 'delivery'
+    
+    # Get top 3 products
+    top_products = compare(json_data, sort_by)
+    
+    # Print results
+    print(json.dumps(top_products, indent=4))
+    
+    return top_products
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Parse and sort products from JSON file.')
-    parser.add_argument('--sort-by', type=str, choices=['price', 'quality'], default='price',
-                        help='The criteria to sort the combined products by (price or quality).')
-    parser.add_argument('--best-deal', action='store_true',
-                        help='Find the best overall deals (lowest price and best quality).')
-    args = parser.parse_args()
-
-    top_items = get_top_products('test.json', sort_by=args.sort_by, best_deal=args.best_deal)
-    
-    print(json.dumps(top_items, indent=4))
+    main()
