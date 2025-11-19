@@ -1,5 +1,5 @@
 from EbayAPI.ebay_call import search_ebay, display_results as ebay_display_results
-from RapidAmazon.rapidapi_amazon import search_amazon
+from RapidAmazon.rapidapi_amazon import search_amazon, filter_product_data
 import json
 
 
@@ -105,18 +105,36 @@ def integrated_API():
     print(f"   Sort: {amazon_sort or 'RELEVANCE'}")
     
     try:
-        amazon_results = search_amazon(
+        amazon_json = search_amazon(
             query=product_name,
-            sort_by=amazon_sort if amazon_sort else None
+            sort_by=amazon_sort if amazon_sort else None,
+            min_price=min_price,
+            max_price=max_price
         )
-        
-        if "error" in amazon_results:
-            results["amazon"] = amazon_results
-            print(f"   Error: {amazon_results['error']}\n")
+
+        if "error" in amazon_json:
+            results["amazon"] = amazon_json
+            print(f"   Error: {amazon_json['error']}\n")
+    
         else:
-            results["amazon"] = amazon_results
-            count = len(amazon_results.get("results", []))
-            print(f"   Success! Found {count} items\n")
+            amazon_results = filter_product_data(amazon_json, 5, fields=[
+                "product_title",
+                "product_url",
+                "product_price",
+                "product_photo",
+                "product_star_rating",
+                "is_prime", # tracks exclusivity
+                "product_original_price",
+                "product_delivery_info"
+                ])
+        
+            if "error" in amazon_results:
+                results["amazon"] = amazon_results
+                print(f"   Error: {amazon_results['error']}\n")
+            else:
+                results["amazon"] = amazon_results
+                count = len(amazon_results.get("amazon_products", []))
+                print(f"   Success! Found {count} items\n")
             
     except Exception as e:
         results["amazon"] = {"error": str(e)}
@@ -183,11 +201,11 @@ def integrated_API():
     amazon_data = results["amazon"]
     if "error" in amazon_data:
         print(f"\n Amazon: {amazon_data['error']}")
-    elif len(amazon_data.get("products", [])) > 0:
-        count = len(amazon_data["products"])
+    elif len(amazon_data.get("amazon_products", [])) > 0:
+        count = len(amazon_data["amazon_products"])
         print(f"\n Amazon: {count} items found")
         print("-" * 60)
-        for i, item in enumerate(amazon_data["products"][:3], 1):
+        for i, item in enumerate(amazon_data["amazon_products"][:3], 1):
             title = item.get("product_title", "N/A")[:65]
             price = item.get("product_price", "N/A")
             print(f"\n  {i}. {title}")
@@ -221,7 +239,7 @@ def integrated_API():
     print("="*60)
     
     # Save results to JSON file
-    output_file = "results.json"
+    output_file = "test.json"
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
     
