@@ -2,21 +2,20 @@ from EbayAPI.ebay_call import search_ebay, display_results as ebay_display_resul
 from RapidAmazon.rapidapi_amazon import search_amazon, filter_product_data
 from chat.chat import get_similar_gift_ideas
 import json
+import traceback
 
 
 def integrated_API():
-    """
-    Full unified search: Searches both eBay and Amazon in one unified script with enhanced filters
-    """
+    """Integrated multiple search across eBay + Amazon based on AI similar gift ideas."""
 
     print("================== Santa's Helper ==================")
-    print("\n=== Search Parameters ===\n")
 
-    # Basic search parameters
+    print("\n=== Search Parameters ===\n")
     product_name = input("Enter a product name to search for: ")
     min_price = input("Enter minimum price (or leave blank): ")
     max_price = input("Enter maximum price (or leave blank): ")
 
+    # Similar gift ideas from LLM
     print("\nGenerating AI similar gift ideas using Phi-3 model...")
     similar_gifts = get_similar_gift_ideas(product_name, num_ideas=5)
 
@@ -24,13 +23,12 @@ def integrated_API():
     for g in similar_gifts:
         print(" -", g)
 
-    # Combine main product + AI alternatives
+    # Combine everything into a list
     search_terms = [product_name] + similar_gifts
 
-    # eBay Filters
     print("\n--- eBay Filters ---")
     condition_filter = input("eBay condition (NEW, USED, NEW|USED, or blank for all): ")
-    ebay_sort = input("eBay sort (price, -price, newlyListed, distance, or blank for 'price'): ") or "price"
+    ebay_sort = input("eBay sort (price, -price, newlyListed, distance, or blank): ") or "price"
 
     print("\n--- Delivery Location (for accurate shipping) ---")
     delivery_country = input("Delivery country (US, GB, CA, AU, or blank): ")
@@ -47,11 +45,11 @@ def integrated_API():
     guaranteed_days_input = input("Guaranteed delivery within X days (or blank): ")
     guaranteed_days = int(guaranteed_days_input) if guaranteed_days_input else None
 
-    # Amazon Filters
+
     print("\n--- Amazon Filters ---")
     amazon_sort = input("Amazon sort (LOW_HIGH_PRICE, HIGH_LOW_PRICE, REVIEWS, or blank): ")
 
-    # Master results object
+    # MASTER RESULTS OBJECT
     results = {
         "product": product_name,
         "similar_gifts": similar_gifts,
@@ -68,16 +66,13 @@ def integrated_API():
         "amazon": {}
     }
 
-    # ==============================
-    # --------- eBay Search --------
-    # ==============================
+
     print("\n" + "=" * 60)
     print(" Running MULTI-SEARCH for eBay")
     print("=" * 60)
 
     for term in search_terms:
         print(f"\nSearching eBay for: {term}")
-
         try:
             price_range = None
             if min_price or max_price:
@@ -91,31 +86,28 @@ def integrated_API():
                 delivery_postal_code=delivery_postal or None,
                 guaranteed_delivery_days=guaranteed_days,
                 max_delivery_cost=max_ship_cost,
-                sort_by=ebay_sort,
+                sort_by=ebay_sort
             )
 
             if ebay_raw:
                 formatted = ebay_display_results(ebay_raw)
                 results["ebay"][term] = formatted
-                print(f"  Found {formatted.get('found_items_count', 0)} items.")
+                print(f" Found {formatted.get('found_items_count', 0)} items.")
             else:
                 results["ebay"][term] = {"error": "No results"}
-                print("  No results.")
+                print(" No results found.")
 
         except Exception as e:
             results["ebay"][term] = {"error": str(e)}
-            print(f"  Error: {e}")
+            print(f" Error: {e}")
+            traceback.print_exc()
 
-    # ==============================
-    # -------- Amazon Search -------
-    # ==============================
     print("\n" + "=" * 60)
     print(" Running MULTI-SEARCH for Amazon")
     print("=" * 60)
 
     for term in search_terms:
         print(f"\nSearching Amazon for: {term}")
-
         try:
             amazon_json = search_amazon(
                 query=term,
@@ -126,7 +118,7 @@ def integrated_API():
 
             if "error" in amazon_json:
                 results["amazon"][term] = amazon_json
-                print(f"  Error: {amazon_json['error']}")
+                print(f" Error: {amazon_json['error']}")
                 continue
 
             amazon_filtered = filter_product_data(
@@ -146,13 +138,13 @@ def integrated_API():
 
             results["amazon"][term] = amazon_filtered
             count = len(amazon_filtered.get("amazon_products", []))
-            print(f"  Found {count} items.")
+            print(f" Found {count} items.")
 
         except Exception as e:
             results["amazon"][term] = {"error": str(e)}
-            print(f"  Error: {e}")
+            print(f" Error: {e}")
+            traceback.print_exc()
 
-    # Save results
     output_file = "results.json"
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
