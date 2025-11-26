@@ -87,6 +87,332 @@ h1::after {
     50% { background-position: 100% 50%; }
 }
 
+/* ==================== Mode Toggle ==================== */
+.mode-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 20px 40px;
+    background: linear-gradient(135deg, #8b0000 0%, #006400 100%);
+    border-bottom: 4px solid #FFD700;
+}
+
+.mode-btn {
+    padding: 14px 32px;
+    font-size: 1.1em;
+    font-weight: 600;
+    border: 3px solid #FFD700;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.1);
+    color: #FFD700;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.mode-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.mode-btn.active {
+    background: #FFD700;
+    color: #8b0000;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5);
+}
+
+/* ==================== Chat Section ==================== */
+.chat-input-container {
+    margin-bottom: 20px;
+}
+
+.chat-input-container textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 16px;
+    border: 3px solid #FFD700;
+    border-radius: 15px;
+    font-size: 1.1em;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    resize: vertical;
+    transition: all 0.3s ease;
+}
+
+.chat-input-container textarea:focus {
+    outline: none;
+    border-color: #8b0000;
+    box-shadow: 0 0 0 4px rgba(139, 0, 0, 0.1);
+}
+
+.helper-text {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    margin-bottom: 20px;
+}
+
+.extraction-preview {
+    background: linear-gradient(135deg, #e8f5e9 0%, #fff8e1 100%);
+    border: 2px solid #006400;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.extraction-preview h4 {
+    color: #006400;
+    margin-bottom: 12px;
+}
+
+.extraction-preview ul {
+    list-style: none;
+    padding: 0;
+}
+
+.extraction-preview li {
+    padding: 6px 0;
+    color: #333;
+}
+
+/* ==================== Sort Criteria Section ==================== */
+.sort-criteria-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px 40px;
+    background: #f0f0f0;
+    border-bottom: 2px solid #ddd;
+}
+
+.sort-criteria-section label {
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.sort-criteria-section select {
+    padding: 10px 20px;
+    border: 2px solid #FFD700;
+    border-radius: 8px;
+    font-size: 1em;
+    background: white;
+    cursor: pointer;
+}
+
+/* ==================== LLM Warning ==================== */
+.llm-warning {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    color: #856404;
+    padding: 15px 20px;
+    margin: 20px 40px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* ==================== Dual Results Display ==================== */
+.results-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    padding: 30px;
+    background: #f5f5f5;
+}
+
+.result-column {
+    flex: 1;
+    min-width: 350px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.column-header {
+    padding: 20px;
+    text-align: center;
+}
+
+.column-header h3 {
+    font-size: 1.4em;
+    margin-bottom: 8px;
+}
+
+.column-header p {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.original-header {
+    background: linear-gradient(135deg, #006400 0%, #228B22 100%);
+    color: #FFD700;
+}
+
+.similar-header {
+    background: linear-gradient(135deg, #8b0000 0%, #c41e3a 100%);
+    color: #FFD700;
+}
+
+.top3-container {
+    padding: 20px;
+}
+
+/* ==================== Product Cards (Top 3) ==================== */
+.product-card {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    padding: 20px;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+    border-left: 5px solid #ddd;
+    transition: all 0.3s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(0,0,0,0.15);
+}
+
+.product-card.ebay {
+    border-left-color: #0064d2;
+}
+
+.product-card.amazon {
+    border-left-color: #ff9900;
+}
+
+.rank-badge {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #8b0000;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1em;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    border: 2px solid white;
+}
+
+.source-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.source-badge.ebay {
+    background: #0064d2;
+    color: white;
+}
+
+.source-badge.amazon {
+    background: #ff9900;
+    color: #111;
+}
+
+.product-image {
+    width: 100px;
+    height: 100px;
+    float: left;
+    margin-right: 15px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.product-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.product-image.no-image {
+    font-size: 3em;
+    color: #ccc;
+}
+
+.product-content {
+    overflow: hidden;
+}
+
+.product-title {
+    font-size: 1em;
+    color: #333;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-price {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #006400;
+    margin-bottom: 8px;
+}
+
+.product-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.meta-item {
+    font-size: 0.85em;
+    color: #666;
+    background: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 5px;
+}
+
+.view-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #006400 0%, #228B22 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.view-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,100,0,0.3);
+}
+
+.no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: #888;
+    font-style: italic;
+}
+
+.loading-sub {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 10px;
+}
+
 .search-section {
     padding: 40px;
     background: #f8f9fa;

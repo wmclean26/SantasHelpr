@@ -8,10 +8,31 @@
 </head>
 <body>
     <div class="container">
-        <h1>Santa's Helpr</h1>
+        <h1>🎄 Santa's Helpr 🎁</h1>
         
-        <!-- Search Filters -->
-        <div class="search-section">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button id="chatModeBtn" class="mode-btn active">💬 Chat Mode</button>
+            <button id="filterModeBtn" class="mode-btn">🔧 Filter Mode</button>
+        </div>
+        
+        <!-- Chat Mode Section -->
+        <div id="chatSection" class="search-section">
+            <h2>Tell me about the gift you're looking for</h2>
+            <p class="helper-text">Example: "gift for 10 year old niece who likes art under $30"</p>
+            
+            <div class="chat-input-container">
+                <textarea id="chatInput" placeholder="Describe what you're looking for... (e.g., 'birthday gift for my 8 year old nephew who loves dinosaurs, budget around $25')"></textarea>
+            </div>
+            
+            <div class="extraction-preview" id="extractionPreview" style="display: none;">
+                <h4>🔍 Detected from your description:</h4>
+                <div id="extractionDetails"></div>
+            </div>
+        </div>
+        
+        <!-- Filter Mode Section -->
+        <div id="filterSection" class="search-section" style="display: none;">
             <h2>Search Filters</h2>
             
             <div class="filter-grid">
@@ -103,21 +124,55 @@
                     </div>
                 </div>
             </div>
-            
-            <button id="searchBtn" class="search-btn">🔍 Search Both</button>
         </div>
+        
+        <!-- Sort Criteria (shared between modes) -->
+        <div class="sort-criteria-section">
+            <label>Sort Results By:</label>
+            <select id="sort_criteria">
+                <option value="price" selected>💰 Best Price</option>
+                <option value="delivery">🚚 Fastest Delivery</option>
+                <option value="quality">⭐ Best Quality</option>
+            </select>
+        </div>
+        
+        <button id="searchBtn" class="search-btn">🔍 Find Gifts</button>
         
         <!-- Loading Spinner -->
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Searching eBay and Amazon...</p>
+            <p class="loading-sub">This may take a moment while we find the best gifts</p>
         </div>
         
         <!-- Status Message -->
         <div id="status" class="status"></div>
         
-        <!-- Results Section -->
-        <div id="results" class="results-section"></div>
+        <!-- LLM Status Warning -->
+        <div id="llmWarning" class="llm-warning" style="display: none;">
+            ⚠️ AI recommendations are not available on this system. Only original search results will be shown.
+        </div>
+        
+        <!-- Results Section - Dual Display -->
+        <div id="results" class="results-section">
+            <!-- Original Results -->
+            <div id="originalResults" class="result-column" style="display: none;">
+                <div class="column-header original-header">
+                    <h3>🎯 Your Search Results</h3>
+                    <p class="search-term-display" id="originalSearchTerm"></p>
+                </div>
+                <div id="originalTop3" class="top3-container"></div>
+            </div>
+            
+            <!-- AI Similar Results -->
+            <div id="similarResults" class="result-column" style="display: none;">
+                <div class="column-header similar-header">
+                    <h3>🤖 AI Recommended Similar Gifts</h3>
+                    <p class="similar-gifts-list" id="similarGiftsList"></p>
+                </div>
+                <div id="similarTop3" class="top3-container"></div>
+            </div>
+        </div>
     </div>
     
     <script src="{{ url_for('static', filename='script.js') }}"></script>
