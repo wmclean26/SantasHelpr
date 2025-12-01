@@ -10,8 +10,14 @@
     <div class="container">
         <h1>Santa's Helpr</h1>
         
-        <!-- Search Filters -->
-        <div class="search-section">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button id="filterModeBtn" class="mode-btn active">🔧 Filter Mode</button>
+            <button id="chatModeBtn" class="mode-btn">💬 Chat Mode</button>
+        </div>
+        
+        <!-- Filter Mode Section -->
+        <div id="filterMode" class="search-section">
             <h2>Search Filters</h2>
             
             <div class="filter-grid">
@@ -105,6 +111,17 @@
             </div>
             
             <button id="searchBtn" class="search-btn">🔍 Search Both</button>
+        </div>
+        
+        <!-- Chat Mode Section -->
+        <div id="chatMode" class="search-section" style="display: none;">
+            <h2>Chat Search</h2>
+            <p class="chat-hint">Describe what you're looking for in natural language!</p>
+            <div class="chat-input-wrapper">
+                <input type="text" id="chatInput" placeholder="e.g., I need a gift for my 10 year old niece under $50" />
+                <button id="chatSearchBtn" class="search-btn">🔍 Search</button>
+            </div>
+            <div id="extractedInfo" class="extracted-info" style="display: none;"></div>
         </div>
         
         <!-- Loading Spinner -->
