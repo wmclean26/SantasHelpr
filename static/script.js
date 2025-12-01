@@ -1,10 +1,133 @@
-// Main search functionality
+// Mode toggle functionality
+const filterModeBtn = document.getElementById('filterModeBtn');
+const chatModeBtn = document.getElementById('chatModeBtn');
+const filterMode = document.getElementById('filterMode');
+const chatMode = document.getElementById('chatMode');
+
+filterModeBtn.addEventListener('click', () => {
+    filterModeBtn.classList.add('active');
+    chatModeBtn.classList.remove('active');
+    filterMode.style.display = 'block';
+    chatMode.style.display = 'none';
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('status').style.display = 'none';
+});
+
+chatModeBtn.addEventListener('click', () => {
+    chatModeBtn.classList.add('active');
+    filterModeBtn.classList.remove('active');
+    chatMode.style.display = 'block';
+    filterMode.style.display = 'none';
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('status').style.display = 'none';
+});
+
+// Main search functionality (Filter Mode)
 document.getElementById('searchBtn').addEventListener('click', performSearch);
 
 // Allow Enter key in product input
 document.getElementById('product').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') performSearch();
 });
+
+// Chat Mode search functionality
+document.getElementById('chatSearchBtn').addEventListener('click', performChatSearch);
+document.getElementById('chatInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') performChatSearch();
+});
+
+async function performChatSearch() {
+    const searchBtn = document.getElementById('chatSearchBtn');
+    const loading = document.getElementById('loading');
+    const status = document.getElementById('status');
+    const results = document.getElementById('results');
+    const extractedInfo = document.getElementById('extractedInfo');
+    const chatInput = document.getElementById('chatInput');
+    
+    const message = chatInput.value.trim();
+    if (!message) {
+        status.textContent = 'Please enter what you\'re looking for';
+        status.className = 'status error';
+        status.style.display = 'block';
+        return;
+    }
+    
+    // Show loading state
+    searchBtn.disabled = true;
+    loading.style.display = 'block';
+    status.style.display = 'none';
+    results.innerHTML = '';
+    extractedInfo.style.display = 'none';
+    
+    try {
+        const response = await fetch('/chat-search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show what was extracted
+            const ext = data.extracted;
+            const meta = ext.metadata;
+            
+            let infoHtml = `<h4>🎁 Santa Understood Your Request 🎅</h4>`;
+            infoHtml += `<p><span class="label">Searching for:</span> ${ext.query}</p>`;
+            
+            if (ext.min_price || ext.max_price) {
+                infoHtml += `<p><span class="label">Price range:</span> $${ext.min_price || '0'} - $${ext.max_price || 'any'}</p>`;
+            }
+            if (meta.relationship) {
+                let recipientInfo = meta.relationship;
+                if (meta.demographic) {
+                    recipientInfo += ` (${meta.demographic})`;
+                }
+                infoHtml += `<p><span class="label">Recipient:</span> ${recipientInfo}</p>`;
+            }
+            if (meta.age) {
+                infoHtml += `<p><span class="label">Age:</span> ${meta.age} years old</p>`;
+            }
+            if (meta.categories && meta.categories.length > 0) {
+                infoHtml += `<p><span class="label">Categories:</span> ${meta.categories.join(', ')}</p>`;
+            }
+            if (meta.keywords && meta.keywords.length > 0) {
+                infoHtml += `<p><span class="label">Keywords:</span> ${meta.keywords.slice(0, 5).join(', ')}</p>`;
+            }
+            
+            extractedInfo.innerHTML = infoHtml;
+            extractedInfo.style.display = 'block';
+            
+            displayResults(data);
+            
+            // Show status
+            const ebayCount = data.ebay.count;
+            const amazonCount = data.amazon.count;
+            let statusMsg = `Found ${ebayCount} eBay items, ${amazonCount} Amazon items`;
+            
+            if (data.amazon.error && ebayCount > 0) {
+                statusMsg += ' (Amazon error - see below)';
+            }
+            
+            status.textContent = statusMsg;
+            status.className = 'status success';
+            status.style.display = 'block';
+        } else {
+            throw new Error(data.error || 'Search failed');
+        }
+    } catch (error) {
+        console.error('Chat search error:', error);
+        status.textContent = `Error: ${error.message}`;
+        status.className = 'status error';
+        status.style.display = 'block';
+    } finally {
+        searchBtn.disabled = false;
+        loading.style.display = 'none';
+    }
+}
 
 async function performSearch() {
     const searchBtn = document.getElementById('searchBtn');
@@ -260,10 +383,56 @@ function createAmazonCard(item, index) {
     titleLink.href = item.product_url || '#';
     titleLink.target = '_blank';
     
-    // Price
+    // Price - handle various formats from Amazon API
     const price = document.createElement('div');
     price.className = 'item-price';
-    price.textContent = `$${item.product_price || 'N/A'}`;
+    let priceText = null;
+    let priceValue = null;
+    
+    // Try product_price first (most common)
+    if (item.product_price !== null && item.product_price !== undefined && item.product_price !== '' && item.product_price !== 'null') {
+        // Remove any existing $ sign and format
+        let priceVal = String(item.product_price).replace(/^\$/, '').trim();
+        if (priceVal && !isNaN(parseFloat(priceVal))) {
+            priceValue = parseFloat(priceVal);
+            priceText = `$${priceValue.toFixed(2)}`;
+        }
+    }
+    // Fallback to product_original_price if product_price is not available
+    else if (item.product_original_price !== null && item.product_original_price !== undefined && item.product_original_price !== '' && item.product_original_price !== 'null') {
+        let priceVal = String(item.product_original_price).replace(/^\$/, '').trim();
+        // Handle malformed prices like "6.496.49"
+        if (priceVal.length > 6 && priceVal.indexOf('.') !== priceVal.lastIndexOf('.')) {
+            priceVal = priceVal.substring(0, priceVal.length / 2);
+        }
+        if (priceVal && !isNaN(parseFloat(priceVal))) {
+            priceValue = parseFloat(priceVal);
+            priceText = `$${priceValue.toFixed(2)}`;
+        }
+    }
+    
+    // If still no price, show unavailable message
+    if (priceText === null) {
+        priceText = '<span class="price-unavailable">See price on Amazon</span>';
+    } else {
+        // Show original price with discount if available
+        if (item.product_original_price !== null && item.product_original_price !== undefined && item.product_price) {
+            let origPrice = String(item.product_original_price).replace(/^\$/, '').trim();
+            // Handle malformed prices
+            if (origPrice.length > 6 && origPrice.indexOf('.') !== origPrice.lastIndexOf('.')) {
+                origPrice = origPrice.substring(0, origPrice.length / 2);
+            }
+            let currentPrice = parseFloat(String(item.product_price).replace(/^\$/, ''));
+            let originalPrice = parseFloat(origPrice);
+            
+            if (!isNaN(originalPrice) && !isNaN(currentPrice) && originalPrice > currentPrice) {
+                const discount = Math.round((1 - currentPrice / originalPrice) * 100);
+                priceText += ` <span class="original-price">(was $${originalPrice.toFixed(2)}, ${discount}% off)</span>`;
+            }
+        }
+    }
+    
+    price.innerHTML = priceText;
     
     // Info
     const meta = document.createElement('div');
