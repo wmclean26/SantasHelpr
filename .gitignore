@@ -10,6 +10,7 @@ chat_config.ini
 # Ignore IDE/project files
 .vscode/
 .idea/
+.venv/
 
 # Ignore OS junk files
 .DS_Store
