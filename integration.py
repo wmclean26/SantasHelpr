@@ -1,6 +1,6 @@
 from EbayAPI.ebay_call import search_ebay, display_results as ebay_display_results
 from RapidAmazon.rapidapi_amazon import search_amazon, filter_product_data
-from chat.chat import get_similar_gift_ideas
+from chat.gemini import get_similar_gift_ideas
 import json
 import traceback
 
@@ -16,8 +16,8 @@ def integrated_API():
     max_price = input("Enter maximum price (or leave blank): ")
 
     # Similar gift ideas from LLM
-    print("\nGenerating AI similar gift ideas using Phi-3 model...")
-    similar_gifts = get_similar_gift_ideas(product_name, num_ideas=5)
+    print("\nGenerating AI similar gift ideas using Gemini...")
+    similar_gifts = get_similar_gift_ideas(product_name, num_ideas=2)
 
     print("\nSimilar items I will also search for:")
     for g in similar_gifts:
@@ -52,7 +52,6 @@ def integrated_API():
     # MASTER RESULTS OBJECT
     results = {
         "product": product_name,
-        "similar_gifts": similar_gifts,
         "filters": {
             "price_range": f"${min_price or 'any'} - ${max_price or 'any'}",
             "ebay_condition": condition_filter or "all",
@@ -123,7 +122,7 @@ def integrated_API():
 
             amazon_filtered = filter_product_data(
                 amazon_json,
-                max_items=5,
+                max_products=5,
                 fields=[
                     "product_title",
                     "product_url",
@@ -154,7 +153,6 @@ def integrated_API():
     print("=" * 60)
 
     return results
-
 
 if __name__ == "__main__":
     integrated_API()

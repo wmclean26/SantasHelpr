@@ -43,9 +43,38 @@ def search_amazon(query, min_price, max_price, sort_by):
 
     return response_json
 
+def is_valid_price(price):
+    """
+    Check if a price is valid (not None, not 'N/A', not 0.0, not empty string).
+    
+    Args:
+        price: The price value to validate
+        
+    Returns:
+        bool: True if price is valid, False otherwise
+    """
+    if price is None:
+        return False
+    
+    # Convert to string and check for N/A
+    price_str = str(price).strip().upper()
+    if price_str in ['N/A', 'NA', '']:
+        return False
+    
+    # Try to convert to float and check if it's 0
+    try:
+        price_float = float(price_str.replace('$', '').replace(',', ''))
+        if price_float <= 0.0:
+            return False
+    except (ValueError, AttributeError):
+        return False
+    
+    return True
+
 def filter_product_data(json_input, max_products, fields):
     """
     Filter product data from a JSON object to include only specified fields and limit the number of products.
+    Automatically filters out products with invalid prices (N/A, 0.0, None, empty).
     
     Args:
         json_input: The JSON object from the API response, expected to contain product data.
@@ -63,7 +92,15 @@ def filter_product_data(json_input, max_products, fields):
     
     filtered_products = []
     
-    for product in products[:max_products]:
+    for product in products:
+        # Skip products with invalid prices
+        if 'product_price' in product and not is_valid_price(product.get('product_price')):
+            continue
+        
+        # Stop if we've reached the desired number of products
+        if len(filtered_products) >= max_products:
+            break
+        
         if fields is None:
             # If no fields specified, include all fields
             filtered_products.append(product)

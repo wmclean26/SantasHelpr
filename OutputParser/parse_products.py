@@ -33,16 +33,18 @@ def quality_score(product):
         return 0.0
     return 0.0
 
-def compare(json_data, sort_by):
+def compare(json_data, sort_by, top_n=3, ensure_both_sources=True):
     """
     Compare and sort products from JSON data.
     
     Args:
         json_data: Dict containing ebay and amazon product data
         sort_by: String - 'price', 'delivery', or 'quality'
+        top_n: Int - Number of top products to return (default: 3)
+        ensure_both_sources: Bool - If True and top_n >= 2, ensures at least one from each source (default: True)
     
     Returns:
-        List of top 3 products based on sort criteria
+        List of top N products based on sort criteria
     """
     all_products = []
 
@@ -109,35 +111,40 @@ def compare(json_data, sort_by):
             product['quality_score'] = quality_score(product)
         all_products.sort(key=lambda x: x['quality_score'], reverse=True)
     
-    # Ensure at least one from each source (eBay and Amazon)
     final_list = []
-    ebay_added = False
-    amazon_added = False
     
-    # First pass: add at least one from each source
-    for product in all_products:
-        if len(final_list) >= 3:
-            break
-        if product['source'] == 'eBay' and not ebay_added:
-            final_list.append(product)
-            ebay_added = True
-        elif product['source'] == 'Amazon' and not amazon_added:
-            final_list.append(product)
-            amazon_added = True
-    
-    # Second pass: fill remaining slots
-    for product in all_products:
-        if len(final_list) >= 3:
-            break
-        if product not in final_list:
-            final_list.append(product)
+    # If top_n is 1 or ensure_both_sources is False, just take top N
+    if top_n == 1 or not ensure_both_sources:
+        final_list = all_products[:top_n]
+    else:
+        # Ensure at least one from each source (eBay and Amazon) when top_n >= 2
+        ebay_added = False
+        amazon_added = False
+        
+        # First pass: add at least one from each source
+        for product in all_products:
+            if len(final_list) >= top_n:
+                break
+            if product['source'] == 'eBay' and not ebay_added:
+                final_list.append(product)
+                ebay_added = True
+            elif product['source'] == 'Amazon' and not amazon_added:
+                final_list.append(product)
+                amazon_added = True
+        
+        # Second pass: fill remaining slots
+        for product in all_products:
+            if len(final_list) >= top_n:
+                break
+            if product not in final_list:
+                final_list.append(product)
     
     # Convert dates to strings for JSON serialization
     for product in final_list:
         if product.get('min_delivery_date'):
             product['min_delivery_date'] = str(product['min_delivery_date'])
     
-    # Return top 3
+    # Return top N products
     return final_list
 
 def main():
@@ -146,11 +153,13 @@ def main():
     with open('test.json', 'r') as f:
         json_data = json.load(f)
     
-    # You can change sort_by to 'price', 'delivery', or 'quality'
-    sort_by = 'delivery'
+    # Configure parameters
+    sort_by = 'price'  # 'price', 'delivery', or 'quality'
+    top_n = 1 # Number of results to return (1, 3, 5, etc.)
+    ensure_both_sources = True  # Ensure at least one from each source
     
-    # Get top 3 products
-    top_products = compare(json_data, sort_by)
+    # Get top N products
+    top_products = compare(json_data, sort_by, top_n, ensure_both_sources)
     
     # Print results
     print(json.dumps(top_products, indent=4))
