@@ -1,6 +1,16 @@
 import unittest
 import json
+import sys
+import types
 from unittest.mock import patch, mock_open
+
+google_mock = types.ModuleType("google")
+genai_mock = types.ModuleType("google.generativeai")
+
+google_mock.generativeai = genai_mock
+sys.modules["google"] = google_mock
+sys.modules["google.generativeai"] = genai_mock
+
 from integration import integrated_API
 
 
