@@ -3,6 +3,10 @@ import os
 import sys
 import json
 from unittest.mock import patch, Mock, mock_open
+
+sys.modules['google'] = Mock()
+sys.modules['google.generativeai'] = Mock()
+
 from integration import integrated_API
 
 
@@ -108,7 +112,6 @@ class TestIntegratedAPI(unittest.TestCase):
 
         results = integrated_API()
 
-        # Only one term should be searched (no similar items)
         self.assertEqual(len(results["ebay"]), 1)
         self.assertIn("shoes", results["ebay"])
 
@@ -143,7 +146,6 @@ class TestIntegratedAPI(unittest.TestCase):
     ):
         results = integrated_API()
 
-        # Should still create amazon entry for each term
         self.assertIn("watch", results["amazon"])
         self.assertIn("error", results["amazon"]["watch"])
 
@@ -160,13 +162,11 @@ class TestIntegratedAPI(unittest.TestCase):
     ):
         mock_ebay.return_value = None
 
-        # Inputs: item, min, max, condition, sort, country, zip, free="y", guaranteed days blank, amazon sort blank
         with patch("builtins.input", side_effect=[
             "headphones", "", "", "", "", "", "", "y", "", ""
         ]):
             results = integrated_API()
 
-        # max_shipping stored should be "$0"
         self.assertEqual(results["filters"]["max_shipping"], "$0")
 
     # =====================================================================
@@ -187,9 +187,7 @@ class TestIntegratedAPI(unittest.TestCase):
         ]):
             results = integrated_API()
 
-        # Should store "any" for price range
         self.assertEqual(results["filters"]["price_range"], "$any - $any")
-
 
 
 if __name__ == "__main__":
