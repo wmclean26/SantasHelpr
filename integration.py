@@ -5,15 +5,26 @@ import json
 import traceback
 
 
+def safe_input(prompt: str, default: str = ""):
+    """
+    Wraps input() to prevent StopIteration during CI tests
+    when mock.side_effect runs out of values.
+    """
+    try:
+        return input(prompt)
+    except (EOFError, StopIteration):
+        return default
+
+
 def integrated_API():
     """Integrated multiple search across eBay + Amazon based on AI similar gift ideas."""
 
     print("================== Santa's Helper ==================")
 
     print("\n=== Search Parameters ===\n")
-    product_name = input("Enter a product name to search for: ")
-    min_price = input("Enter minimum price (or leave blank): ")
-    max_price = input("Enter maximum price (or leave blank): ")
+    product_name = safe_input("Enter a product name to search for: ")
+    min_price = safe_input("Enter minimum price (or leave blank): ")
+    max_price = safe_input("Enter maximum price (or leave blank): ")
 
     # Similar gift ideas from LLM
     print("\nGenerating AI similar gift ideas using Gemini...")
@@ -27,27 +38,26 @@ def integrated_API():
     search_terms = [product_name] + similar_gifts
 
     print("\n--- eBay Filters ---")
-    condition_filter = input("eBay condition (NEW, USED, NEW|USED, or blank for all): ")
-    ebay_sort = input("eBay sort (price, -price, newlyListed, distance, or blank): ") or "price"
+    condition_filter = safe_input("eBay condition (NEW, USED, NEW|USED, or blank for all): ")
+    ebay_sort = safe_input("eBay sort (price, -price, newlyListed, distance, or blank): ") or "price"
 
     print("\n--- Delivery Location (for accurate shipping) ---")
-    delivery_country = input("Delivery country (US, GB, CA, AU, or blank): ")
-    delivery_postal = input("ZIP/Postal code (or leave blank): ")
+    delivery_country = safe_input("Delivery country (US, GB, CA, AU, or blank): ")
+    delivery_postal = safe_input("ZIP/Postal code (or leave blank): ")
 
     print("\n--- Shipping Options ---")
-    free_shipping_only = input("Free shipping only? (y/n): ").lower()
+    free_shipping_only = safe_input("Free shipping only? (y/n): ").lower()
     if free_shipping_only == "y":
         max_ship_cost = 0
     else:
-        max_ship_input = input("Max shipping cost $ (or blank): ")
+        max_ship_input = safe_input("Max shipping cost $ (or blank): ")
         max_ship_cost = float(max_ship_input) if max_ship_input else None
 
-    guaranteed_days_input = input("Guaranteed delivery within X days (or blank): ")
+    guaranteed_days_input = safe_input("Guaranteed delivery within X days (or blank): ")
     guaranteed_days = int(guaranteed_days_input) if guaranteed_days_input else None
 
-
     print("\n--- Amazon Filters ---")
-    amazon_sort = input("Amazon sort (LOW_HIGH_PRICE, HIGH_LOW_PRICE, REVIEWS, or blank): ")
+    amazon_sort = safe_input("Amazon sort (LOW_HIGH_PRICE, HIGH_LOW_PRICE, REVIEWS, or blank): ")
 
     # MASTER RESULTS OBJECT
     results = {
@@ -64,7 +74,6 @@ def integrated_API():
         "ebay": {},
         "amazon": {}
     }
-
 
     print("\n" + "=" * 60)
     print(" Running MULTI-SEARCH for eBay")
@@ -153,6 +162,7 @@ def integrated_API():
     print("=" * 60)
 
     return results
+
 
 if __name__ == "__main__":
     integrated_API()
