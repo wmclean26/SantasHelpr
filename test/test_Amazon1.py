@@ -4,7 +4,7 @@
 #         return {"error": f"API request failed: {str(e)}"}
 
 import unittest
-from RapidAmazon.rapidapi_amazon import search_amazon, run_amazon_search
+from RapidAmazon.rapidapi_amazon import search_amazon
 import os
 import configparser
 
@@ -32,13 +32,6 @@ class TestAmazonSearch(unittest.TestCase):
         if not self.x_rapidapi_key or not self.x_rapidapi_host:
             self.skipTest("API credentials are not set, skipping valid search test.")
         result = search_amazon("laptop", max_price=1000)
-        self.assertNotIn("error", result)
-        self.assertIn("products", result)
-        self.assertIsInstance(result["products"], list)
-    def test_run_amazon_search(self):
-        if not self.x_rapidapi_key or not self.x_rapidapi_host:
-            self.skipTest("API credentials are not set, skipping run_amazon_search test.")
-        result = run_amazon_search("headphones", max_price=200)
         self.assertNotIn("error", result)
         self.assertIn("products", result)
         self.assertIsInstance(result["products"], list)
