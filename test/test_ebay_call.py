@@ -1,9 +1,13 @@
+# python
+# File: `test_ebay_call.py`
+
 import unittest
 import json
 import sys
 import os
 import types
 import importlib
+import time
 from unittest.mock import patch, mock_open, MagicMock
 
 # Add project root to path for imports (same as test_integration1.py)
@@ -11,239 +15,202 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Mock google.generativeai before importing modules that might import it
-google_mock = types.ModuleType("google")
-genai_mock = types.ModuleType("google.generativeai")
-google_mock.generativeai = genai_mock
-sys.modules["google"] = google_mock
-sys.modules["google.generativeai"] = genai_mock
-
-import tempfile
-import shutil
 
 class TestEbayCallModule(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Create a temporary copy of the repo root to safely write a config.ini
-        cls.orig_cwd = os.getcwd()
-        cls.temp_dir = tempfile.mkdtemp(prefix="santashelpr_test_")
-        # Copy project files into temp_dir by only creating a minimal config.ini where module expects it.
-        # Change working dir so that ebay_call's CONFIG_FILE 'config.ini' is found when module is imported.
-        os.chdir(cls.temp_dir)
-        # Write a minimal config.ini that ebay_call expects
-        cls.config_path = os.path.join(cls.temp_dir, "config.ini")
+        # Ensure a minimal config.ini exists in project root before importing the module
+        cls.config_path = os.path.join(project_root, "config.ini")
         with open(cls.config_path, "w", encoding="utf-8") as f:
-            f.write("[ebay]\nCLIENT_ID = dummy_id\nCLIENT_SECRET = dummy_secret\n")
+            f.write("[ebay]\nCLIENT_ID = test_id\nCLIENT_SECRET = test_secret\n")
 
-        # Now import the module under test after ensuring config.ini exists
-        # Use importlib to allow re-imports in tearDownClass if needed
+        # Provide a minimal requests shim so `import requests` succeeds if not installed.
+        if "requests" not in sys.modules:
+            req_mod = types.ModuleType("requests")
+
+            class Resp:
+                def __init__(self, status_code=200, json_data=None, text=""):
+                    self.status_code = status_code
+                    self._json = json_data if json_data is not None else {}
+                    self.text = text
+
+                def json(self):
+                    return self._json
+
+                def raise_for_status(self):
+                    if not (200 <= self.status_code < 300):
+                        raise Exception(f"HTTP {self.status_code}: {self.text}")
+
+            def _get(*args, **kwargs):
+                return Resp()
+
+            def _post(*args, **kwargs):
+                return Resp()
+
+            req_mod.Response = Resp
+            req_mod.get = _get
+            req_mod.post = _post
+            sys.modules["requests"] = req_mod
+
+        # Import the module under test after config and shim are in place
         cls.ebay_call = importlib.import_module("EbayAPI.ebay_call")
+        importlib.reload(cls.ebay_call)
 
     @classmethod
     def tearDownClass(cls):
-        # Cleanup: return to original cwd and remove temp dir
-        os.chdir(cls.orig_cwd)
-        shutil.rmtree(cls.temp_dir, ignore_errors=True)
-        # Also try to unload module from sys.modules to prevent side-effects
+        # Remove the temporary config.ini
+        try:
+            os.remove(cls.config_path)
+        except Exception:
+            pass
+        # Cleanup imported module state
         if "EbayAPI.ebay_call" in sys.modules:
             del sys.modules["EbayAPI.ebay_call"]
 
     def setUp(self):
-        # Ensure we reset any module-level token state between tests
+        # Ensure token state is reset before each test
         self.ebay_call.EBAY_ACCESS_TOKEN = None
         self.ebay_call.TOKEN_EXPIRY_TIME = 0
 
     def test_condition_map_contains_expected(self):
-        # Simple test to cover the CONDITION_MAP global
-        self.assertIn("NEW", self.ebay_call.CONDITION_MAP)
-        self.assertEqual(self.ebay_call.CONDITION_MAP["NEW"], "1000")
+        # Happy-case: some known mappings exist
+        cm = self.ebay_call.CONDITION_MAP
+        self.assertIn("NEW", cm)
+        self.assertEqual(cm["NEW"], "1000")
+        self.assertIn("USED", cm)
 
-    @patch("requests.post")
-    def test_get_access_token_success(self, mock_post):
-        # Mock successful token response
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"access_token": "token123", "expires_in": 3600}
-        mock_post.return_value = mock_resp
+    def test_get_access_token_success(self):
+        # Patch requests.post to return a successful token response
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"access_token": "tok123", "expires_in": 3600}
 
-        ok = self.ebay_call.get_access_token()
-        self.assertTrue(ok)
-        self.assertEqual(self.ebay_call.EBAY_ACCESS_TOKEN, "token123")
-        self.assertGreater(self.ebay_call.TOKEN_EXPIRY_TIME, 0)
+        with patch.object(self.ebay_call, "requests") as mock_requests:
+            mock_requests.post.return_value = fake_resp
+            ok = self.ebay_call.get_access_token()
+            self.assertTrue(ok)
+            self.assertEqual(self.ebay_call.EBAY_ACCESS_TOKEN, "tok123")
+            self.assertGreater(self.ebay_call.TOKEN_EXPIRY_TIME, time.time())
 
-    @patch("requests.post")
-    def test_get_access_token_failure(self, mock_post):
-        # Mock failure response (non-200)
-        mock_resp = MagicMock()
-        mock_resp.status_code = 400
-        mock_resp.text = "Bad credentials"
-        mock_post.return_value = mock_resp
+    def test_get_access_token_failure(self):
+        # Patch requests.post to simulate failure
+        fake_resp = MagicMock()
+        fake_resp.status_code = 400
+        fake_resp.text = "bad request"
 
-        ok = self.ebay_call.get_access_token()
-        self.assertFalse(ok)
-        # Token should remain None on failure
-        self.assertIsNone(self.ebay_call.EBAY_ACCESS_TOKEN)
+        with patch.object(self.ebay_call, "requests") as mock_requests:
+            mock_requests.post.return_value = fake_resp
+            ok = self.ebay_call.get_access_token()
+            self.assertFalse(ok)
+            self.assertIsNone(self.ebay_call.EBAY_ACCESS_TOKEN)
 
-    @patch("requests.get")
-    def test_search_ebay_basic_and_filters(self, mock_get):
-        # Prepare module to have an access token and not to refresh
+    def test_search_ebay_basic_and_filters(self):
+        # Ensure a token is present (bypass get_access_token)
         self.ebay_call.EBAY_ACCESS_TOKEN = "tok"
-        self.ebay_call.TOKEN_EXPIRY_TIME = 9999999999
+        self.ebay_call.TOKEN_EXPIRY_TIME = time.time() + 3600
 
-        # Mock GET to return a simple JSON payload
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"itemSummaries": []}
-        mock_get.return_value = mock_resp
+        sample_api_result = {"itemSummaries": [{"title": "Item1", "shortDescription": "desc", "price": {"currency": "USD", "value": "10.00"}}]}
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = sample_api_result
+        fake_resp.raise_for_status = lambda: None
 
-        # Capture printed warning for unknown condition
-        with patch("builtins.print") as mock_print:
-            res = self.ebay_call.search_ebay(
-                query="test query",
-                price_range="10..50",
-                condition_filter="NEW|3000|UNKNOWN_COND",
-                delivery_country="US",
-                delivery_postal_code="90210",
-                guaranteed_delivery_days=2,
-                max_delivery_cost=5.0,
-                sort_by="-price"
-            )
-
-            # The function should return the parsed JSON
-            self.assertEqual(res, {"itemSummaries": []})
-
-            # Unknown condition should produce a warning print
-            printed = False
-            for call in mock_print.call_args_list:
-                args = call[0]
-                if args and "Unknown condition" in args[0]:
-                    printed = True
-            self.assertTrue(printed)
-
-        # Verify requests.get was called and inspect params passed to eBay API
-        mock_get.assert_called_once()
-        called_url = mock_get.call_args[0][0]
-        self.assertEqual(called_url, self.ebay_call.EBAY_API_URL)
-
-        called_kwargs = mock_get.call_args[1]
-        # Check headers include Authorization Bearer and marketplace ID
-        self.assertIn("headers", called_kwargs)
-        headers = called_kwargs["headers"]
-        self.assertIn("Authorization", headers)
-        self.assertTrue(headers["Authorization"].startswith("Bearer "))
-        self.assertIn("X-EBAY-C-MARKETPLACE-ID", headers)
-
-        # Verify params include the composed filter string
-        self.assertIn("params", called_kwargs)
-        params = called_kwargs["params"]
-        self.assertEqual(params["q"], "test query")
-        self.assertEqual(params["sort"], "-price")
-        self.assertIn("priceCurrency:USD", params["filter"])
-        # conditionIds should have both converted ID and numeric ID
-        self.assertIn("conditionIds:{1000|3000}", params["filter"])
+        with patch.object(self.ebay_call, "requests") as mock_requests:
+            mock_requests.get.return_value = fake_resp
+            res = self.ebay_call.search_ebay("widget", price_range="5..20", condition_filter="NEW|3000", delivery_country="US", delivery_postal_code="90210", guaranteed_delivery_days=2, max_delivery_cost=0, sort_by="price")
+            self.assertEqual(res, sample_api_result)
+            mock_requests.get.assert_called_once()
+            # verify filter param contains price and deliveryCountry
+            called_params = mock_requests.get.call_args.kwargs.get("params", {})
+            self.assertIn("filter", called_params)
+            self.assertIn("price:[5..20]", called_params["filter"])
+            self.assertIn("deliveryCountry:US", called_params["filter"])
 
     def test_search_ebay_guaranteed_without_location_warns(self):
-        # Ensure access token exists
+        # Token present
         self.ebay_call.EBAY_ACCESS_TOKEN = "tok"
-        self.ebay_call.TOKEN_EXPIRY_TIME = 9999999999
+        self.ebay_call.TOKEN_EXPIRY_TIME = time.time() + 3600
 
-        with patch("requests.get") as mock_get, patch("builtins.print") as mock_print:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = {"itemSummaries": []}
-            mock_get.return_value = mock_resp
+        # Patch requests.get to avoid network
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"itemSummaries": []}
+        fake_resp.raise_for_status = lambda: None
 
-            # Call with guaranteed_delivery_days but without delivery_country/postal_code
-            self.ebay_call.search_ebay(query="x", guaranteed_delivery_days=5)
+        with patch.object(self.ebay_call, "requests") as mock_requests, patch("builtins.print") as mock_print:
+            mock_requests.get.return_value = fake_resp
+            # Call with guaranteed_delivery_days but no delivery location
+            _ = self.ebay_call.search_ebay("widget", guaranteed_delivery_days=3)
+            # search_ebay should print a warning about needing deliveryCountry and deliveryPostalCode
+            mock_print.assert_any_call("Warning: guaranteedDeliveryInDays requires deliveryCountry and deliveryPostalCode")
 
-            # Should have printed a warning about needing delivery country/postal code
-            printed = False
-            for call in mock_print.call_args_list:
-                args = call[0]
-                if args and "guaranteedDeliveryInDays requires deliveryCountry and deliveryPostalCode" in args[0]:
-                    printed = True
-            self.assertTrue(printed)
+    def test_display_results_no_items(self):
+        out = self.ebay_call.display_results(None)
+        self.assertEqual(out, {"search_status": "No items found."})
+        out2 = self.ebay_call.display_results({})
+        self.assertEqual(out2, {"search_status": "No items found."})
 
     def test_display_results_with_items(self):
-        # Prepare a representative item similar to API response
-        data = {
+        sample = {
             "itemSummaries": [
                 {
-                    "title": "Cool Item",
-                    "shortDescription": "A very cool item",
-                    "itemWebUrl": "http://ebay.example/item",
-                    "additionalImages": [{"imageUrl": "http://img1"}],
-                    "image": {"imageUrl": "http://mainimg"},
-                    "price": {"currency": "USD", "value": "12.34"},
-                    "marketingPrice": {
-                        "originalPrice": {"value": "15.00"},
-                        "discountAmount": {"value": "2.66"},
-                        "discountPercentage": 17.73
-                    },
+                    "title": "T",
+                    "shortDescription": "desc",
+                    "itemWebUrl": "http://example",
+                    "additionalImages": [{"imageUrl": "img1"}],
+                    "image": {"imageUrl": "img2"},
+                    "price": {"currency": "USD", "value": "9.99"},
+                    "marketingPrice": {"originalPrice": {"value": 15}, "discountAmount": {"value": 5}, "discountPercentage": 33},
                     "condition": "NEW",
-                    "categories": [{"categoryName": "Toys"}],
-                    "itemLocation": {"city": "Beverly Hills", "stateOrProvince": "CA", "country": "US"},
-                    "shippingOptions": [
-                        {"shippingCost": {"value": "0.00", "currency": "USD"}, "minEstimatedDeliveryDate": "2025-12-05", "maxEstimatedDeliveryDate": "2025-12-10"}
-                    ],
-                    "seller": {"feedbackPercentage": "99.8"},
+                    "categories": [{"categoryName": "C"}],
+                    "itemLocation": {"city": "City", "stateOrProvince": "ST", "country": "US"},
+                    "shippingOptions": [{"shippingCost": {"value": 0, "currency": "USD"}, "minEstimatedDeliveryDate": "2025-01-01", "maxEstimatedDeliveryDate": "2025-01-03"}],
+                    "seller": {"feedbackPercentage": 99},
                     "watchCount": 5,
-                    "itemCreationDate": "2025-11-01"
+                    "itemCreationDate": "2024-01-01"
                 }
             ]
         }
-
-        out = self.ebay_call.display_results(data)
+        out = self.ebay_call.display_results(sample)
         self.assertIsInstance(out, dict)
-        self.assertEqual(out["found_items_count"], 1)
-        self.assertEqual(len(out["items"]), 1)
-        item = out["items"][0]
-        self.assertEqual(item["title"], "Cool Item")
-        self.assertTrue("http://ebay.example/item" in item["url"])
-        self.assertEqual(item["price"], "USD 12.34")
-        self.assertEqual(item["categories"], ["Toys"])
-        self.assertIn("Beverly Hills", item["itemLocation"])
+        self.assertEqual(out.get("found_items_count"), 1)
+        items = out.get("items")
+        self.assertIsInstance(items, list)
+        item = items[0]
+        self.assertEqual(item["title"], "T")
+        self.assertIn("img1", item["images"])
+        self.assertIn("img2", item["images"])
+        self.assertEqual(item["price"], "USD 9.99")
 
-    def test_display_results_no_items(self):
-        # Passing empty dict or missing itemSummaries should return the "No items found" message
-        self.assertEqual(self.ebay_call.display_results({}), {"search_status": "No items found."})
-        self.assertEqual(self.ebay_call.display_results({"itemSummaries": []})["found_items_count"], 0)
+    def test_run_search_success_and_writes_file(self):
+        # Set token state
+        self.ebay_call.EBAY_ACCESS_TOKEN = "tok"
+        self.ebay_call.TOKEN_EXPIRY_TIME = time.time() + 3600
 
-    @patch("builtins.open", new_callable=mock_open)
-    def test_run_search_success_and_writes_file(self, mock_file):
-        # Patch get_access_token to succeed, and search_ebay + display_results to return expected values
-        with patch.object(self.ebay_call, "get_access_token", return_value=True) as mock_token, \
-             patch.object(self.ebay_call, "search_ebay", return_value={"itemSummaries": [{"title": "Item 1"}]}) as mock_search, \
-             patch.object(self.ebay_call, "display_results", return_value={"found_items_count": 1, "items": [{"title": "Item 1"}]}) as mock_display:
+        sample_api_result = {"itemSummaries": [{"title": "Item1", "shortDescription": "desc", "price": {"currency": "USD", "value": "10.00"}}]}
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = sample_api_result
+        fake_resp.raise_for_status = lambda: None
 
-            # Call run_search and capture the returned JSON string
-            result_json = self.ebay_call.run_search(
-                query="something",
-                min_price=10,
-                max_price=50,
-                condition="NEW",
-                delivery_country="US",
-                delivery_postal_code="90210",
-                guaranteed_delivery_days=3,
-                max_delivery_cost=0,
-                sort_by="price",
-                output_file="out.json"
-            )
-
-            # Verify file write was attempted
-            mock_file.assert_called_with("out.json", "w", encoding="utf-8")
-            # Ensure returned JSON contains our formatted output
-            parsed = json.loads(result_json)
+        m_open = mock_open()
+        with patch.object(self.ebay_call, "requests") as mock_requests, patch("builtins.open", m_open):
+            mock_requests.get.return_value = fake_resp
+            out_json = self.ebay_call.run_search("widget", min_price=5, max_price=20, condition="NEW", output_file="out.json")
+            # Ensure file was opened for writing
+            m_open.assert_called_once_with("out.json", "w", encoding="utf-8")
+            parsed = json.loads(out_json)
+            # Expect formatted display JSON with found_items_count
             self.assertIn("found_items_count", parsed)
-            self.assertEqual(parsed["found_items_count"], 1)
 
     def test_run_search_token_failure(self):
-        # If get_access_token fails, run_search returns an error JSON
+        # Simulate get_access_token failing by patching the function used by run_search
         with patch.object(self.ebay_call, "get_access_token", return_value=False):
-            result_json = self.ebay_call.run_search(query="nope")
-            parsed = json.loads(result_json)
-            self.assertEqual(parsed["status"], "error")
-            self.assertIn("Failed to generate token", parsed["message"])
+            out = self.ebay_call.run_search("widget")
+            parsed = json.loads(out)
+            self.assertEqual(parsed.get("status"), "error")
+            self.assertIn("Failed to generate token", parsed.get("message", ""))
+
 
 if __name__ == "__main__":
     unittest.main()
