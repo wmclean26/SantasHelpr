@@ -121,6 +121,7 @@ class TestAmazonSearch(unittest.TestCase):
     def test_search_amazon_makes_request(self):
         # Mock requests.get used inside the module to avoid network calls
         mock_response = Mock()
+        mock_response.status_code = 200  # Add status_code to avoid TypeError
         mock_response.json.return_value = {"products": []}
 
         with patch.object(self.module.requests, 'get', return_value=mock_response) as mock_get:
