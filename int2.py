@@ -116,7 +116,11 @@ def integrated_API(
                     "product_star_rating",
                     "is_prime",
                     "product_original_price",
-                    "product_delivery_info"
+                    "product_delivery_info",
+                    "asin",
+                    "sales_volume",
+                    "product_availability",
+                    "product_num_ratings"
                 ]
             )
             main_results_amazon = amazon_filtered
@@ -225,7 +229,11 @@ def integrated_API(
                         "product_star_rating",
                         "is_prime",
                         "product_original_price",
-                        "product_delivery_info"
+                        "product_delivery_info",
+                        "asin",
+                        "sales_volume",
+                        "product_availability",
+                        "product_num_ratings"
                     ]
                 )
                 amazon_similar = amazon_filtered

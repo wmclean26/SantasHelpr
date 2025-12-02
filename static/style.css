@@ -343,6 +343,58 @@ h1::after {
     background: #006400;
 }
 
+.result-header.similar {
+    background: linear-gradient(135deg, #1a5f2c 0%, #006400 50%, #1a5f2c 100%);
+    border-bottom: 3px solid #FFD700;
+}
+
+.result-header.similar::before {
+    content: "✨ ";
+    animation: sparkle 1.5s ease-in-out infinite;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+@keyframes sparkle {
+    0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+    50% { opacity: 0.7; transform: scale(1.2) rotate(10deg); }
+}
+
+.search-term-badge {
+    background: linear-gradient(135deg, rgba(139, 0, 0, 0.15) 0%, rgba(0, 100, 0, 0.15) 100%);
+    border: 1px solid rgba(139, 0, 0, 0.3);
+    color: #8b0000;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 500;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+
+.source-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+}
+
+.source-badge.ebay {
+    background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+    color: white;
+}
+
+.source-badge.amazon {
+    background: linear-gradient(135deg, #FF9900 0%, #e68a00 100%);
+    color: #232f3e;
+}
+
 .error-box {
     background: rgba(254, 242, 242, 0.9);
     border: 1px solid rgba(107, 29, 44, 0.3);
@@ -481,6 +533,14 @@ h1::after {
     color: #8b0000;
     text-decoration: line-through;
     margin-left: 8px;
+}
+
+/* Unified discount text style for both eBay and Amazon */
+.item-price .discount-text {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #006400;
+    margin-left: 6px;
 }
 
 .item-price .price-unavailable {
