@@ -1,17 +1,23 @@
 import unittest
 import json
 import sys
+import os
 import types
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Mock google.generativeai before importing int2
 google_mock = types.ModuleType("google")
 genai_mock = types.ModuleType("google.generativeai")
-
 google_mock.generativeai = genai_mock
 sys.modules["google"] = google_mock
 sys.modules["google.generativeai"] = genai_mock
 
-from integration import integrated_API
+from int2 import integrated_API
 
 
 class TestIntegratedAPI(unittest.TestCase):
@@ -20,177 +26,200 @@ class TestIntegratedAPI(unittest.TestCase):
     #  FULL FLOW TEST
     # =====================================================================
     @patch("builtins.open", new_callable=mock_open)
-    @patch("integration.filter_product_data")
-    @patch("integration.search_amazon")
-    @patch("integration.ebay_display_results")
-    @patch("integration.search_ebay")
-    @patch("integration.get_similar_gift_ideas")
-    @patch("builtins.input")
+    @patch("int2.compare")
+    @patch("int2.filter_product_data")
+    @patch("int2.search_amazon")
+    @patch("int2.ebay_display_results")
+    @patch("int2.search_ebay")
+    @patch("int2.get_similar_gift_ideas")
     def test_full_integration_flow(
-        self, mock_input, mock_get_similar, mock_search_ebay,
-        mock_ebay_display, mock_search_amazon, mock_filter_amazon, mock_file
+        self, mock_get_similar, mock_search_ebay,
+        mock_ebay_display, mock_search_amazon, mock_filter_amazon, 
+        mock_compare, mock_file
     ):
         """Main happy-path flow."""
 
-        mock_input.side_effect = [
-            "pokemon cards",
-            "10",
-            "100",
-            "NEW",
-            "price",
-            "US",
-            "90210",
-            "n",
-            "15",
-            "3",
-            "LOW_HIGH_PRICE"
+        mock_get_similar.return_value = ["rare holo card", "trading binder"]
+        mock_search_ebay.return_value = {"itemSummaries": [{"title": "Item 1"}]}
+        mock_ebay_display.return_value = {
+            "found_items_count": 2,
+            "items": [{"title": "eBay Item", "price": "10.00"}]
+        }
+        mock_search_amazon.return_value = {"products": [{"product_title": "Item A", "product_price": "15.00"}]}
+        mock_filter_amazon.return_value = {
+            "amazon_products": [{"product_title": "Item A", "product_price": "15.00"}]
+        }
+        # Mock compare to return products with required structure
+        mock_compare.return_value = [
+            {"source": "eBay", "title": "eBay Item", "price": 10.0, "url": "http://ebay.com"}
         ]
 
-        mock_get_similar.return_value = ["rare holo card", "trading binder"]
-        mock_search_ebay.return_value = {"items": [1, 2]}
-        mock_ebay_display.return_value = {"found_items_count": 2}
-        mock_search_amazon.return_value = {"products": [{"product_title": "Item A"}]}
-        mock_filter_amazon.return_value = {
-            "amazon_products": [{"product_title": "Item A"}]
-        }
-
-        results = integrated_API()
+        results = integrated_API(
+            product_name="pokemon cards",
+            min_price="10",
+            max_price="100",
+            condition_filter="NEW",
+            ebay_sort="price",
+            delivery_country="US",
+            delivery_postal="90210",
+            max_ship_cost=15,
+            guaranteed_days=3,
+            amazon_sort="LOW_HIGH_PRICE",
+            comparison_criteria="price"
+        )
 
         mock_get_similar.assert_called_once_with("pokemon cards", num_ideas=2)
 
-        expected_terms = ["pokemon cards", "rare holo card", "trading binder"]
-        for term in expected_terms:
-            self.assertIn(term, results["ebay"])
-            self.assertIn(term, results["amazon"])
-
+        # Should search main + 2 similar terms = 3 calls each
         self.assertEqual(mock_search_ebay.call_count, 3)
         self.assertEqual(mock_search_amazon.call_count, 3)
-        self.assertEqual(mock_filter_amazon.call_count, 3)
 
-        mock_file.assert_called_once_with("results.json", "w", encoding="utf-8")
+        # Check result structure
+        self.assertIn("products", results)
+        self.assertIn("search_query", results)
+        self.assertEqual(results["search_query"], "pokemon cards")
 
     # =====================================================================
     #  EBAY ERROR HANDLING
     # =====================================================================
-    @patch("integration.search_ebay", side_effect=Exception("eBay failure"))
-    @patch("integration.get_similar_gift_ideas", return_value=["alt"])
-    @patch("builtins.input", side_effect=["chair", "", "", "", "", "", "", "", "", ""])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"products": []})
+    @patch("int2.ebay_display_results")
+    @patch("int2.search_ebay", side_effect=Exception("eBay failure"))
+    @patch("int2.get_similar_gift_ideas", return_value=["alt"])
     def test_error_handling_ebay(
-        self, mock_file, mock_input, mock_gift, mock_ebay
+        self, mock_gift, mock_ebay, mock_ebay_display, 
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        results = integrated_API()
-        self.assertIn("error", results["ebay"]["chair"])
-        self.assertIn("eBay failure", results["ebay"]["chair"]["error"])
+        # Should not raise, just handle gracefully
+        results = integrated_API(product_name="chair")
+        # Result should still be returned (with empty or partial data)
+        self.assertIn("products", results)
 
     # =====================================================================
     #  AMAZON ERROR HANDLING
     # =====================================================================
-    @patch("integration.search_amazon", side_effect=Exception("Amazon blew up"))
-    @patch("integration.get_similar_gift_ideas", return_value=["alt"])
-    @patch("builtins.input", side_effect=["chair", "", "", "", "", "", "", "", "", ""])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data")
+    @patch("int2.search_amazon", side_effect=Exception("Amazon blew up"))
+    @patch("int2.ebay_display_results", return_value={"found_items_count": 0, "items": []})
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=["alt"])
     def test_error_handling_amazon(
-        self, mock_file, mock_input, mock_gift, mock_amazon
+        self, mock_gift, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        results = integrated_API()
-        self.assertIn("error", results["amazon"]["chair"])
-        self.assertIn("Amazon blew up", results["amazon"]["chair"]["error"])
+        # Should not raise, just handle gracefully
+        results = integrated_API(product_name="chair")
+        self.assertIn("products", results)
 
     # =====================================================================
     #  GEMINI RETURNS EMPTY LIST
     # =====================================================================
-    @patch("integration.get_similar_gift_ideas", return_value=[])
-    @patch("integration.search_ebay", return_value=None)
-    @patch("integration.search_amazon", return_value={"products": []})
-    @patch("integration.filter_product_data", return_value={"amazon_products": []})
-    @patch("builtins.input", side_effect=["shoes", "", "", "", "", "", "", "", "", ""])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"products": []})
+    @patch("int2.ebay_display_results", return_value={"found_items_count": 0, "items": []})
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=[])
     def test_empty_gemini_response(
-        self, mock_file, mock_input, mock_search_ebay, mock_search_amazon,
-        mock_filter_amazon, mock_gemini
+        self, mock_gemini, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
         """Ensure script still runs when AI gives no similar ideas."""
 
-        results = integrated_API()
+        results = integrated_API(product_name="shoes")
 
-        # Only one term should be searched (no similar items)
-        self.assertEqual(len(results["ebay"]), 1)
-        self.assertIn("shoes", results["ebay"])
+        # Only main product should be searched (no similar items)
+        self.assertEqual(mock_ebay.call_count, 1)
+        self.assertEqual(mock_amazon.call_count, 1)
+        self.assertIn("products", results)
 
     # =====================================================================
     #  EBAY RETURNS NO RESULTS
     # =====================================================================
-    @patch("integration.search_ebay", return_value=None)
-    @patch("integration.search_amazon", return_value={"products": []})
-    @patch("integration.filter_product_data", return_value={"amazon_products": []})
-    @patch("integration.get_similar_gift_ideas", return_value=["alt"])
-    @patch("builtins.input", side_effect=["tablet", "", "", "", "", "", "", "", "", ""])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"products": []})
+    @patch("int2.ebay_display_results")
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=["alt"])
     def test_ebay_no_results(
-        self, mock_file, mock_input, mock_gift, mock_search_amazon,
-        mock_filter_amazon, mock_ebay
+        self, mock_gift, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        results = integrated_API()
-        self.assertEqual(results["ebay"]["tablet"]["error"], "No results")
+        results = integrated_API(product_name="tablet")
+        # Should still return valid structure
+        self.assertIn("products", results)
+        self.assertIn("search_query", results)
 
     # =====================================================================
     #  AMAZON RETURNS MALFORMED DATA
     # =====================================================================
-    @patch("integration.search_amazon", return_value={"not_products": True})
-    @patch("integration.filter_product_data")
-    @patch("integration.search_ebay", return_value=None)
-    @patch("integration.get_similar_gift_ideas", return_value=["alt"])
-    @patch("builtins.input", side_effect=["watch", "", "", "", "", "", "", "", "", ""])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"not_products": True})
+    @patch("int2.ebay_display_results", return_value={"found_items_count": 0, "items": []})
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=["alt"])
     def test_amazon_malformed_data(
-        self, mock_file, mock_input, mock_gift, mock_ebay,
-        mock_filter_amazon, mock_amazon
+        self, mock_gift, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        results = integrated_API()
-
-        # Should still create amazon entry for each term
-        self.assertIn("watch", results["amazon"])
-        self.assertIn("error", results["amazon"]["watch"])
+        results = integrated_API(product_name="watch")
+        # Should still return valid structure
+        self.assertIn("products", results)
 
     # =====================================================================
-    #  ENSURE FREE SHIPPING INPUT "y" FORCES max_ship_cost = 0
+    #  TEST FILTERS ARE PASSED CORRECTLY
     # =====================================================================
-    @patch("integration.search_ebay")
-    @patch("integration.search_amazon", return_value={"products": []})
-    @patch("integration.filter_product_data", return_value={"amazon_products": []})
-    @patch("integration.get_similar_gift_ideas", return_value=[])
     @patch("builtins.open", new_callable=mock_open)
-    def test_free_shipping_forces_zero(
-        self, mock_file, mock_gemini, mock_filter, mock_amazon, mock_ebay
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"products": []})
+    @patch("int2.ebay_display_results", return_value={"found_items_count": 0, "items": []})
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=[])
+    def test_filters_in_response(
+        self, mock_gemini, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        mock_ebay.return_value = None
+        results = integrated_API(
+            product_name="headphones",
+            min_price="20",
+            max_price="100",
+            max_ship_cost=0,
+            comparison_criteria="price"
+        )
 
-        with patch("builtins.input", side_effect=[
-            "headphones", "", "", "", "", "", "", "y", "", ""
-        ]):
-            results = integrated_API()
-
+        self.assertIn("filters", results)
+        self.assertEqual(results["filters"]["price_range"], "$20 - $100")
         self.assertEqual(results["filters"]["max_shipping"], "$0")
+        self.assertEqual(results["filters"]["comparison_criteria"], "price")
 
     # =====================================================================
-    #  ENSURE MIN/MAX PRICE BLANKS WORK
+    #  TEST NO PRICE RANGE
     # =====================================================================
-    @patch("integration.search_ebay")
-    @patch("integration.search_amazon", return_value={"products": []})
-    @patch("integration.filter_product_data", return_value={"amazon_products": []})
-    @patch("integration.get_similar_gift_ideas", return_value=[])
     @patch("builtins.open", new_callable=mock_open)
+    @patch("int2.compare", return_value=[])
+    @patch("int2.filter_product_data", return_value={"amazon_products": []})
+    @patch("int2.search_amazon", return_value={"products": []})
+    @patch("int2.ebay_display_results", return_value={"found_items_count": 0, "items": []})
+    @patch("int2.search_ebay", return_value=None)
+    @patch("int2.get_similar_gift_ideas", return_value=[])
     def test_no_price_range(
-        self, mock_file, mock_gemini, mock_filter, mock_amazon, mock_ebay
+        self, mock_gemini, mock_ebay, mock_ebay_display,
+        mock_amazon, mock_filter, mock_compare, mock_file
     ):
-        mock_ebay.return_value = None
+        results = integrated_API(product_name="monitor")
 
-        with patch("builtins.input", side_effect=[
-            "monitor", "", "", "", "", "", "", "n", "", ""
-        ]):
-            results = integrated_API()
-
+        self.assertIn("filters", results)
         self.assertEqual(results["filters"]["price_range"], "$any - $any")
 
 
