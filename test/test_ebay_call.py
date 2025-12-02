@@ -211,6 +211,5 @@ class TestEbayCallModule(unittest.TestCase):
             self.assertEqual(parsed.get("status"), "error")
             self.assertIn("Failed to generate token", parsed.get("message", ""))
 
-
 if __name__ == "__main__":
     unittest.main()
