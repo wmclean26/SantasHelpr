@@ -427,7 +427,7 @@ if __name__ == "__main__":
     extractor = GiftKeywordExtractor()
 
     # Test query
-    query = "i need a gift for my 21 year old girlfriend under 50 dollars tomorrow"
+    query = "i need the cheapest gift i can find for my 10 year old brother"
     print(f"Query: {query}\n")
 
     result = extractor.extract(query)
