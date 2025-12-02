@@ -309,7 +309,6 @@ def integrated_API(
 
     return final_combined_results
 
-
 if __name__ == "__main__":
     # Example usage
     result = integrated_API(
