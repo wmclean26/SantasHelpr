@@ -22,6 +22,7 @@ def quality_score(product):
         elif 'used' in condition:
             return 0.5
         return 0.0
+        
     elif product['source'] == 'Amazon':
         rating_str = product.get('star_rating')
         if rating_str:
