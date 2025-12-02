@@ -3,8 +3,8 @@ Flask web application for eBay and Amazon product search
 """
 
 from flask import Flask, render_template, request, jsonify
-from int2 import integrated_API
-from RecommendationAlgorithm.simple_nlp import SimpleNLPExtractor
+from api_process import integrated_API
+from NLP.simple_nlp import SimpleNLPExtractor
 
 app = Flask(__name__)
 

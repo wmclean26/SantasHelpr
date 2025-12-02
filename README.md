@@ -24,6 +24,10 @@ Santa's Helpr is a Python-based application that helps users find the perfect gi
    ```bash
    pip install -r requirements.txt
    ```
+   - Make sure you have the proper SpaCy model downloaded as well
+   ```bash 
+   python -m spacy download en_core_web_sm
+   ```
 3. **Configure API keys:**
    - Create a `config.ini` file from the `config.ini.example`.
    - Add your API keys for eBay and RapidAPI (for Amazon).
@@ -37,13 +41,12 @@ Santa's Helpr is a Python-based application that helps users find the perfect gi
 ## Project Structure
 
 - `app.py`: The main Flask application file.
-- `api_process.py`: Handles the processing of API calls.
-- `integration.py`: Integrates the EbayAPI call, RapidAmazon API call, the OutputParser, and chat, takes in the user input from the web interface and returns a JSON containing five gifts.
+- `api_process.py`: Integrates the EbayAPI call, RapidAmazon API call, the OutputParser, and chat, takes in the user input from the web interface and returns a JSON containing five gifts.
 - `config.ini`: Configuration file for API keys and other settings.
-- `chat/`: Contains the API call to Gemini to choose two alternative gift ideas to the one prompted by the user.
+- `Gemini/`: Contains the API call to Gemini to choose two alternative gift ideas to the one prompted by the user.
 - `EbayAPI/`: Contains the module for interacting with the eBay API.
 - `RapidAmazon/`: Contains the module for interacting with the RapidAPI Amazon endpoint.
-- `RecommendationAlgorithm/`: Contains the keyword extraction and recommendation logic for the NLP portion of the web interface.
-- `OutputParser/`: Takes a JSON input containing gifts from both Amazon and Ebay and a number of gifts to return. For this project, it picks three results out of ten for the main gift recommendations, and then one for the alternative gift options. 
+- `NLP/`: Contains the keyword extraction and recommendation logic for the NLP portion of the web interface.
+- `ProductFiltering/`: Takes a JSON input containing gifts from both Amazon and Ebay and a number of gifts to return. For this project, it picks three results out of ten for the main gift recommendations, and then one for the alternative gift options. 
 - `templates/`: Contains the HTML templates for the web interface used in `app.py.`
 - `static/`: Contains the CSS and JavaScript files used in `app.py.`
