@@ -3,10 +3,15 @@ from configparser import ConfigParser, ExtendedInterpolation
 import dateparser
 import re 
 import requests
+import os 
 
 # SETUP API KEYS AND HOSTS 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up one level to SantasHelpr folder
+config_path = os.path.join(script_dir, '..', 'config.ini')
+
 config = ConfigParser(interpolation=ExtendedInterpolation())
-config.read('config.ini')
+config.read(config_path)
 
 x_rapidapi_key = config['amazon']['rapid_api_key']
 x_rapidapi_host = config['amazon']['rapid_api_host']
@@ -38,6 +43,15 @@ def search_amazon(query, min_price, max_price, sort_by):
     }
 
     response = requests.get(url, headers=headers, params=querystring)
+
+    # === Add these lines! ===
+    print(f"--- API Status Code: {response.status_code} ---")
+    
+    # This will print the raw error message if status is 4xx or 5xx
+    if response.status_code >= 400:
+        print(f"Raw Response Text: {response.text}")
+        response.raise_for_status() 
+    # ==========================
 
     response_json = response.json()
 
@@ -235,8 +249,8 @@ def main():
     # print(extract_delivery_date("FREE deliveryDec 1 - 10on $35 of items shipped by AmazonOr fastest deliveryDec 1 - 7", "", ""))
     # TEST INPUTS 
     product = "mario bros pushie"
-    min_price = "10"
-    max_price = "20"
+    min_price = 10.00
+    max_price = 20.00
 
     # INPUTS FOR THE QUERY ITSELF 
     querystring = {

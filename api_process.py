@@ -5,17 +5,59 @@ from OutputParser.parse_products import compare  # Import the compare function
 import json
 import traceback
 
+def standardize_product(product, source):
+    """
+    Standardize product data format between eBay and Amazon.
+    
+    Args:
+        product: Raw product dict from eBay or Amazon
+        source: 'eBay' or 'Amazon'
+    
+    Returns:
+        Standardized product dict with consistent fields
+    """
+    if source == 'eBay':
+        return {
+            'source': 'eBay',
+            'title': product.get('title'),
+            'description': product.get('description'),
+            'url': product.get('url'),
+            'images': product.get('images', []),
+            'price': product.get('price'),
+            'condition': product.get('condition'),
+            'categories': product.get('categories', []),
+            'itemLocation': product.get('itemLocation'),
+            'shippingOptions': product.get('shippingOptions', []),
+            'seller_feedbackPercentage': product.get('seller_feedbackPercentage'),
+            'watchCount': product.get('watchCount'),
+            'itemCreationDate': product.get('itemCreationDate'),
+            'market_price': product.get('market_price', {})
+        }
+    elif source == 'Amazon':
+        return {
+            'source': 'Amazon',
+            'product_title': product.get('product_title'),
+            'product_url': product.get('product_url'),
+            'product_price': product.get('product_price'),
+            'product_photo': product.get('product_photo'),
+            'product_star_rating': product.get('product_star_rating'),
+            'is_prime': product.get('is_prime'),
+            'product_original_price': product.get('product_original_price'),
+            'product_delivery_info': product.get('product_delivery_info')
+        }
+    return product
+
 def integrated_API(
     product_name,
     min_price=None,
     max_price=None,
     condition_filter=None,
-    ebay_sort="price",
+    ebay_sort="distance",
     delivery_country=None,
     delivery_postal=None,
     max_ship_cost=None,
     guaranteed_days=None,
-    amazon_sort=None,
+    amazon_sort="LOW_HIGH_PRICE",
     comparison_criteria='price'  # New parameter for comparison
 ):
     """
@@ -26,7 +68,7 @@ def integrated_API(
         min_price (str, optional): Minimum price
         max_price (str, optional): Maximum price
         condition_filter (str, optional): eBay condition (NEW, USED, NEW|USED)
-        ebay_sort (str, optional): eBay sort (price, -price, newlyListed, distance). Default: "price"
+        ebay_sort (str, optional): eBay sort (price, -price, newlyListed, distance). Default: "distance"
         delivery_country (str, optional): Delivery country (US, GB, CA, AU)
         delivery_postal (str, optional): ZIP/Postal code
         max_ship_cost (float, optional): Max shipping cost (0 for free shipping only)
@@ -116,11 +158,7 @@ def integrated_API(
                     "product_star_rating",
                     "is_prime",
                     "product_original_price",
-                    "product_delivery_info",
-                    "asin",
-                    "sales_volume",
-                    "product_availability",
-                    "product_num_ratings"
+                    "product_delivery_info"
                 ]
             )
             main_results_amazon = amazon_filtered
@@ -132,6 +170,10 @@ def integrated_API(
         print(f" Error: {e}")
         traceback.print_exc()
 
+    # DEBUG: Print what we're sending to compare
+    print("\n[DEBUG] eBay items count:", len(main_results_ebay.get('items', [])))
+    print("[DEBUG] Amazon items count:", len(main_results_amazon.get('amazon_products', [])))
+    
     # Get top 3 main products using compare function
     print("\n" + "=" * 60)
     print(f" Selecting TOP 3 products for: {product_name}")
@@ -144,10 +186,32 @@ def integrated_API(
     
     top_3_main = compare(main_combined, comparison_criteria, top_n=3, ensure_both_sources=True)
     
+    # DEBUG: Print what compare returned
+    print(f"\n[DEBUG] Compare returned {len(top_3_main)} products:")
+    for prod in top_3_main:
+        print(f"  - Source: {prod.get('source')}, Title: {prod.get('title') or prod.get('product_title', 'N/A')}")
+    
+    # Standardize the top 3 products
+    standardized_top_3 = []
+    for prod in top_3_main:
+        source = prod.get('source')
+        # Find the original product with all fields
+        if source == 'eBay':
+            for item in main_results_ebay.get('items', []):
+                if item.get('title') == prod.get('title') or item.get('url') == prod.get('url'):
+                    standardized_top_3.append(standardize_product(item, 'eBay'))
+                    break
+        elif source == 'Amazon':
+            for item in main_results_amazon.get('amazon_products', []):
+                if (item.get('product_title') == prod.get('product_title') or 
+                    item.get('product_url') == prod.get('url')):
+                    standardized_top_3.append(standardize_product(item, 'Amazon'))
+                    break
+    
     print(f"\nTop 3 products selected:")
-    for idx, prod in enumerate(top_3_main, 1):
+    for idx, prod in enumerate(standardized_top_3, 1):
         title = prod.get('title') or prod.get('product_title', 'Unknown')
-        price = prod.get('price', 'N/A')
+        price = prod.get('price') or prod.get('product_price', 'N/A')
         source = prod.get('source', 'Unknown')
         print(f"  {idx}. [{source}] {title[:50]}... - ${price}")
 
@@ -229,11 +293,7 @@ def integrated_API(
                         "product_star_rating",
                         "is_prime",
                         "product_original_price",
-                        "product_delivery_info",
-                        "asin",
-                        "sales_volume",
-                        "product_availability",
-                        "product_num_ratings"
+                        "product_delivery_info"
                     ]
                 )
                 amazon_similar = amazon_filtered
@@ -251,17 +311,30 @@ def integrated_API(
             "amazon": amazon_similar
         }
         
-        top_1_similar = compare(similar_combined, comparison_criteria, top_n=1, ensure_both_sources=False)
+        top_1_similar = compare(similar_combined, comparison_criteria, top_n=1, ensure_both_sources=True)
         
         if top_1_similar:
             top_product = top_1_similar[0]
-            top_product['search_term'] = term  # Add the search term for reference
-            similar_top_products.append(top_product)
+            source = top_product.get('source')
             
-            title = top_product.get('title') or top_product.get('product_title', 'Unknown')
-            price = top_product.get('price', 'N/A')
-            source = top_product.get('source', 'Unknown')
-            print(f"\n🏆 Best for {term}: [{source}] {title[:40]}... - ${price}")
+            # Find and standardize the original product with all fields
+            standardized_product = None
+            if source == 'eBay':
+                items = ebay_similar.get('items', [])
+                if items:
+                    standardized_product = standardize_product(items[0], 'eBay')
+            elif source == 'Amazon':
+                items = amazon_similar.get('amazon_products', [])
+                if items:
+                    standardized_product = standardize_product(items[0], 'Amazon')
+            
+            if standardized_product:
+                standardized_product['search_term'] = term
+                similar_top_products.append(standardized_product)
+                
+                title = standardized_product.get('title') or standardized_product.get('product_title', 'Unknown')
+                price = standardized_product.get('price') or standardized_product.get('product_price', 'N/A')
+                print(f"\n🏆 Best for {term}: [{source}] {title[:40]}... - ${price}")
 
     # Combine top 3 main + top 2 similar into final result
     final_combined_results = {
@@ -280,25 +353,25 @@ def integrated_API(
         "products": []
     }
     
-    # Add top 3 main products
-    for idx, product in enumerate(top_3_main, 1):
+    # Add top 3 main products with all their original fields
+    for idx, product in enumerate(standardized_top_3, 1):
         product['rank'] = idx
         product['product_type'] = 'main'
         final_combined_results["products"].append(product)
     
-    # Add top 2 similar products
+    # Add top 2 similar products with all their original fields
     for idx, product in enumerate(similar_top_products, 4):
         product['rank'] = idx
         product['product_type'] = 'similar'
         final_combined_results["products"].append(product)
 
     # Save combined top 5 results
-    combined_output_file = "top_5_products.json"
-    with open(combined_output_file, "w", encoding="utf-8") as f:
+    output_file = "final_results.json"
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(final_combined_results, f, indent=4, ensure_ascii=False)
 
     print("\n" + "=" * 60)
-    print(f"Top 5 combined products saved to {combined_output_file}")
+    print(f"Top 5 combined products saved to {output_file}")
     print("=" * 60)
     
     print("\n" + "=" * 60)
@@ -309,7 +382,7 @@ def integrated_API(
         prod_type = product.get('product_type')
         source = product.get('source')
         title = product.get('title') or product.get('product_title', 'Unknown')
-        price = product.get('price', 'N/A')
+        price = product.get('price') or product.get('product_price', 'N/A')
         search_term = product.get('search_term', product_name)
         print(f"{rank}. [{prod_type.upper()}] [{source}] {title[:50]}...")
         print(f"   Price: ${price} | Search: {search_term}")
@@ -321,12 +394,5 @@ if __name__ == "__main__":
     # Example usage
     result = integrated_API(
         product_name="power rangers",
-        min_price="10",
-        max_price="50",
-        condition_filter="NEW",
-        delivery_country="US",
-        delivery_postal="10001",
-        max_ship_cost=0,  # Free shipping only
-        amazon_sort="LOW_HIGH_PRICE",
-        comparison_criteria="price"  # Can be 'price', 'delivery', or 'quality'
+        min_price=10
     )

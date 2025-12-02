@@ -9,6 +9,8 @@ Pillow==10.1.0
 
 # NLP
 spacy>=3.5.0
+google-generativeai>=0.3.0
+dateparser>=1.1.0
 dateparser>=1.1.0
 
 # Testing (for CI)

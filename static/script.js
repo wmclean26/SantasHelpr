@@ -104,13 +104,10 @@ async function performChatSearch() {
             displayResults(data);
             
             // Show status
-            const ebayCount = data.ebay.count;
-            const amazonCount = data.amazon.count;
-            let statusMsg = `Found ${ebayCount} eBay items, ${amazonCount} Amazon items`;
-            
-            if (data.amazon.error && ebayCount > 0) {
-                statusMsg += ' (Amazon error - see below)';
-            }
+            const totalCount = data.total_count || 0;
+            const mainCount = data.products ? data.products.filter(p => p.product_type === 'main').length : 0;
+            const similarCount = data.products ? data.products.filter(p => p.product_type === 'similar').length : 0;
+            let statusMsg = `Found ${mainCount} main results, ${similarCount} similar recommendations`;
             
             status.textContent = statusMsg;
             status.className = 'status success';
@@ -170,13 +167,10 @@ async function performSearch() {
             displayResults(data);
             
             // Show status
-            const ebayCount = data.ebay.count;
-            const amazonCount = data.amazon.count;
-            let statusMsg = `Found ${ebayCount} eBay items, ${amazonCount} Amazon items`;
-            
-            if (data.amazon.error && ebayCount > 0) {
-                statusMsg += ' (Amazon error - see below)';
-            }
+            const totalCount = data.total_count || 0;
+            const mainCount = data.products ? data.products.filter(p => p.product_type === 'main').length : 0;
+            const similarCount = data.products ? data.products.filter(p => p.product_type === 'similar').length : 0;
+            let statusMsg = `Found ${mainCount} main results, ${similarCount} AI-recommended similar items`;
             
             status.textContent = statusMsg;
             status.className = 'status success';
@@ -199,46 +193,269 @@ function displayResults(data) {
     const results = document.getElementById('results');
     results.innerHTML = '';
     
-    // Display eBay results
-    if (data.ebay.items.length > 0) {
-        const ebaySection = createResultSection('eBay', data.ebay.items, false);
-        results.appendChild(ebaySection);
-    }
+    const products = data.products || [];
     
-    // Display Amazon results or error
-    if (data.amazon.items.length > 0) {
-        const amazonSection = createResultSection('Amazon', data.amazon.items, true);
-        results.appendChild(amazonSection);
-    } else if (data.amazon.error) {
-        const errorBox = document.createElement('div');
-        errorBox.className = 'error-box';
-        errorBox.innerHTML = `
-            <h3>⚠️ Amazon API Error</h3>
-            <p>${data.amazon.error}</p>
-        `;
-        results.appendChild(errorBox);
-    }
-    
-    if (data.ebay.items.length === 0 && data.amazon.items.length === 0) {
+    if (products.length === 0) {
         results.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No results found. Try adjusting your filters.</p>';
+        return;
+    }
+    
+    // Separate main and similar products
+    const mainProducts = products.filter(p => p.product_type === 'main');
+    const similarProducts = products.filter(p => p.product_type === 'similar');
+    
+    // Display main results
+    if (mainProducts.length > 0) {
+        const mainSection = createUnifiedResultSection('🎁 Top Results', mainProducts, 'main');
+        results.appendChild(mainSection);
+    }
+    
+    // Display similar/recommended results
+    if (similarProducts.length > 0) {
+        const similarSection = createUnifiedResultSection('✨ AI-Recommended Similar Items', similarProducts, 'similar');
+        results.appendChild(similarSection);
     }
 }
 
-function createResultSection(source, items, isAmazon) {
+function createUnifiedResultSection(title, items, sectionType) {
     const section = document.createElement('div');
     section.className = 'result-group';
     
     const header = document.createElement('div');
-    header.className = `result-header ${isAmazon ? 'amazon' : ''}`;
-    header.textContent = `${source} Results (${items.length} items)`;
+    header.className = `result-header ${sectionType === 'similar' ? 'similar' : ''}`;
+    header.textContent = `${title} (${items.length} items)`;
     section.appendChild(header);
     
     items.forEach((item, index) => {
-        const card = isAmazon ? createAmazonCard(item, index) : createEbayCard(item, index);
+        const card = createUnifiedCard(item, index);
         section.appendChild(card);
     });
     
     return section;
+}
+
+function createUnifiedCard(item, index) {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    
+    const isEbay = item.source === 'eBay';
+    const isAmazon = item.source === 'Amazon';
+    
+    // Source badge
+    const sourceBadge = document.createElement('div');
+    sourceBadge.className = `source-badge ${isEbay ? 'ebay' : 'amazon'}`;
+    sourceBadge.textContent = item.source;
+    
+    // Image
+    const imageDiv = document.createElement('div');
+    imageDiv.className = 'item-image';
+    
+    // Handle different image field names from compare function vs raw data
+    let imageSrc = item.image || null;
+    if (!imageSrc && isEbay) {
+        const images = item.images || [];
+        imageSrc = images.length > 0 ? images[0] : null;
+    }
+    if (!imageSrc && isAmazon) {
+        imageSrc = item.product_photo || null;
+    }
+    
+    if (imageSrc) {
+        const img = document.createElement('img');
+        img.src = imageSrc;
+        img.alt = item.title || item.product_title || 'Product';
+        img.onerror = () => { imageDiv.innerHTML = 'No Image<br>Available'; imageDiv.classList.add('no-image'); };
+        imageDiv.appendChild(img);
+    } else {
+        imageDiv.innerHTML = 'No Image<br>Available';
+        imageDiv.classList.add('no-image');
+    }
+    imageDiv.appendChild(sourceBadge);
+    
+    // Details
+    const details = document.createElement('div');
+    details.className = 'item-details';
+    
+    // Title - handle both compare format (title) and raw format (product_title for Amazon)
+    let titleText = item.title || item.product_title || 'Unknown Product';
+    if (titleText === 'LEGO' || titleText === 'N/A') {
+        titleText = extractProductNameFromUrl(item.url || item.product_url) || 'Unknown Product';
+    }
+    
+    const titleLink = document.createElement('a');
+    titleLink.className = 'item-title';
+    titleLink.textContent = titleText;
+    titleLink.href = item.url || item.product_url || '#';
+    titleLink.target = '_blank';
+    
+    // Price - handle both numeric (from compare) and string formats
+    const price = document.createElement('div');
+    price.className = 'item-price';
+    let priceText = 'N/A';
+    
+    if (item.price !== null && item.price !== undefined) {
+        // Price from compare function is already numeric
+        if (typeof item.price === 'number') {
+            priceText = `$${item.price.toFixed(2)}`;
+        } else {
+            // String format - clean it up
+            let priceVal = String(item.price).replace(/^\$/, '').replace(/^USD\s*/, '').trim();
+            if (priceVal && !isNaN(parseFloat(priceVal))) {
+                priceText = `$${parseFloat(priceVal).toFixed(2)}`;
+            } else {
+                priceText = item.price;
+            }
+        }
+    } else if (item.product_price) {
+        // Amazon raw format
+        let priceVal = String(item.product_price).replace(/^\$/, '').replace(/^USD\s*/, '').trim();
+        if (priceVal && !isNaN(parseFloat(priceVal))) {
+            priceText = `$${parseFloat(priceVal).toFixed(2)}`;
+        }
+    }
+    
+    // Handle discount/original price - unified format for both eBay and Amazon
+    if (isEbay && item.market_price && item.market_price.discount_percentage) {
+        priceText += ` <span class="discount-text">(${item.market_price.discount_percentage}% off - was $${item.market_price.original})</span>`;
+    }
+    if (isAmazon && item.product_original_price && priceText !== 'N/A') {
+        let origPrice = String(item.product_original_price).replace(/^\$/, '').trim();
+        let currentPrice = parseFloat(String(item.product_price || item.price).replace(/^\$/, ''));
+        let originalPrice = parseFloat(origPrice);
+        
+        if (!isNaN(originalPrice) && !isNaN(currentPrice) && originalPrice > currentPrice) {
+            const discount = Math.round((1 - currentPrice / originalPrice) * 100);
+            priceText += ` <span class="discount-text">(${discount}% off - was $${originalPrice.toFixed(2)})</span>`;
+        }
+    }
+    price.innerHTML = priceText;
+    
+    // Info / Meta
+    const meta = document.createElement('div');
+    meta.className = 'item-meta';
+    
+    if (isEbay) {
+        // Condition (from compare or rich format)
+        if (item.condition) {
+            const condition = document.createElement('span');
+            condition.textContent = `📦 ${item.condition}`;
+            meta.appendChild(condition);
+        }
+        
+        // Location (rich format only)
+        if (item.itemLocation) {
+            const location = document.createElement('span');
+            location.textContent = `📍 ${item.itemLocation}`;
+            meta.appendChild(location);
+        }
+        
+        // Shipping (rich format)
+        const shippingOpts = item.shippingOptions || [];
+        if (shippingOpts.length > 0) {
+            const shipping = document.createElement('span');
+            const shipCost = shippingOpts[0].cost;
+            if (shipCost === '0.00' || shipCost === '0.0' || shipCost === 0 || shipCost === '0') {
+                shipping.innerHTML = '<span class="badge free-shipping">🚚 FREE SHIPPING</span>';
+            } else {
+                shipping.textContent = `🚚 $${shipCost}`;
+            }
+            meta.appendChild(shipping);
+        }
+        
+        // Delivery date (from compare format) - format nicely
+        if (item.min_delivery_date) {
+            const delivery = document.createElement('span');
+            const formattedDate = formatDeliveryDate(item.min_delivery_date);
+            delivery.textContent = `📅 Arrives ${formattedDate}`;
+            meta.appendChild(delivery);
+        }
+        
+        // Seller rating (rich format)
+        if (item.seller_feedbackPercentage && item.seller_feedbackPercentage !== 'N/A') {
+            const seller = document.createElement('span');
+            seller.textContent = `⭐ ${item.seller_feedbackPercentage}% seller`;
+            meta.appendChild(seller);
+        }
+    } else {
+        // Amazon meta
+        // Rating (from compare: star_rating, or rich format: product_star_rating)
+        const starRating = item.star_rating || item.product_star_rating;
+        if (starRating) {
+            const rating = document.createElement('span');
+            rating.textContent = `⭐ ${starRating}`;
+            meta.appendChild(rating);
+        }
+        
+        if (item.is_prime) {
+            const prime = document.createElement('span');
+            prime.innerHTML = '<span class="badge prime">📦 Prime</span>';
+            meta.appendChild(prime);
+        }
+        
+        // Delivery date - format nicely and avoid duplicates
+        let amazonDeliveryShown = false;
+        if (item.min_delivery_date) {
+            const delivery = document.createElement('span');
+            const formattedDate = formatDeliveryDate(item.min_delivery_date);
+            delivery.textContent = `📅 Arrives ${formattedDate}`;
+            meta.appendChild(delivery);
+            amazonDeliveryShown = true;
+        }
+        
+        // Delivery info (rich format) - only show if not already shown
+        if (!amazonDeliveryShown && item.product_delivery_info) {
+            const deliveryInfo = item.product_delivery_info;
+            if (typeof deliveryInfo === 'object' && deliveryInfo.minDelivery) {
+                const delivery = document.createElement('span');
+                const formattedDate = formatDeliveryDate(deliveryInfo.minDelivery);
+                delivery.textContent = `📅 Arrives ${formattedDate}`;
+                meta.appendChild(delivery);
+            }
+        }
+    }
+    
+    // Similar search term badge (for similar products)
+    if (item.search_term && item.product_type === 'similar') {
+        const searchTermBadge = document.createElement('div');
+        searchTermBadge.className = 'search-term-badge';
+        searchTermBadge.textContent = `🔍 "${item.search_term}"`;
+        details.appendChild(searchTermBadge);
+    }
+    
+    // Description (eBay only, truncated)
+    if (isEbay && item.description && item.description !== 'N/A') {
+        const desc = document.createElement('div');
+        desc.className = 'item-description';
+        desc.textContent = item.description.length > 100 ? item.description.substring(0, 100) + '...' : item.description;
+        details.appendChild(desc);
+    }
+    
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+    
+    const detailsBtn = document.createElement('button');
+    detailsBtn.className = 'btn btn-details';
+    detailsBtn.textContent = '📋 Details';
+    detailsBtn.onclick = () => isEbay ? showEbayDetails(item) : showAmazonDetails(item);
+    
+    const linkBtn = document.createElement('button');
+    linkBtn.className = 'btn btn-link';
+    linkBtn.textContent = `🔗 View on ${item.source}`;
+    linkBtn.onclick = () => window.open(item.url || item.product_url, '_blank');
+    
+    actions.appendChild(detailsBtn);
+    actions.appendChild(linkBtn);
+    
+    details.appendChild(titleLink);
+    details.appendChild(price);
+    details.appendChild(meta);
+    details.appendChild(actions);
+    
+    card.appendChild(imageDiv);
+    card.appendChild(details);
+    
+    return card;
 }
 
 function createEbayCard(item, index) {
@@ -537,23 +754,43 @@ function parseDeliveryInfo(deliveryInfo) {
     return result;
 }
 
+// Format delivery date to be more readable
+function formatDeliveryDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    
+    try {
+        // Handle ISO date format (2025-12-04)
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+            const date = new Date(dateStr);
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+        return dateStr;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
 // Modal functionality
 function showEbayDetails(item) {
     const modal = createModal('eBay Item Details');
     const body = modal.querySelector('.modal-body');
     
-    // Title
+    // Title - handle both compare format and rich format
     const title = document.createElement('h2');
-    title.textContent = item.title || 'N/A';
+    title.textContent = item.title || 'Unknown Product';
     title.style.marginBottom = '20px';
     body.appendChild(title);
     
-    // Images
-    if (item.images && item.images.length > 0) {
-        const section = createDetailSection('Images', `${item.images.filter(i => i).length} available`);
+    // Images (only for rich format)
+    const imageSrc = item.image || (item.images && item.images.length > 0 ? item.images[0] : null);
+    if (imageSrc) {
+        const section = createDetailSection('Image');
         const imgContainer = document.createElement('div');
         imgContainer.className = 'detail-images';
-        item.images.slice(0, 5).forEach(imgUrl => {
+        
+        const images = item.images || [imageSrc];
+        images.slice(0, 5).forEach(imgUrl => {
             if (imgUrl) {
                 const img = document.createElement('img');
                 img.src = imgUrl;
@@ -570,13 +807,19 @@ function showEbayDetails(item) {
     const priceGrid = document.createElement('div');
     priceGrid.className = 'detail-grid';
     
-    // Current Price
+    // Current Price - handle both numeric (compare) and string formats
     const currentPriceDiv = document.createElement('div');
     currentPriceDiv.className = 'detail-item';
-    currentPriceDiv.innerHTML = `<strong>Current Price:</strong><span>${item.price || 'N/A'}</span>`;
+    let priceDisplay = 'N/A';
+    if (typeof item.price === 'number') {
+        priceDisplay = `$${item.price.toFixed(2)}`;
+    } else if (item.price) {
+        priceDisplay = item.price;
+    }
+    currentPriceDiv.innerHTML = `<strong>Current Price:</strong><span>${priceDisplay}</span>`;
     priceGrid.appendChild(currentPriceDiv);
     
-    // Original Price & Discount
+    // Original Price & Discount (rich format only)
     const marketPrice = item.market_price || {};
     if (marketPrice.original) {
         const origPriceDiv = document.createElement('div');
@@ -667,9 +910,10 @@ function showEbayDetails(item) {
 }
 
 function showAmazonDetails(item) {
-    let title = item.product_title || 'N/A';
+    // Handle both compare format (title) and rich format (product_title)
+    let title = item.title || item.product_title || 'N/A';
     if (title === 'LEGO' || title === 'N/A') {
-        title = extractProductNameFromUrl(item.product_url);
+        title = extractProductNameFromUrl(item.url || item.product_url) || 'Unknown Product';
     }
     
     const modal = createModal('Amazon Item Details');
@@ -681,11 +925,12 @@ function showAmazonDetails(item) {
     titleElem.style.marginBottom = '20px';
     body.appendChild(titleElem);
     
-    // Image
-    if (item.product_photo) {
+    // Image - handle both compare format (image) and rich format (product_photo)
+    const imageSrc = item.image || item.product_photo;
+    if (imageSrc) {
         const section = createDetailSection('Product Image');
         const img = document.createElement('img');
-        img.src = item.product_photo;
+        img.src = imageSrc;
         img.style.maxWidth = '300px';
         img.style.borderRadius = '8px';
         section.appendChild(img);
@@ -697,13 +942,25 @@ function showAmazonDetails(item) {
     const priceGrid = document.createElement('div');
     priceGrid.className = 'detail-grid';
     
-    // Current Price
+    // Current Price - handle both numeric (compare) and string formats
     const currentPriceDiv = document.createElement('div');
     currentPriceDiv.className = 'detail-item';
-    currentPriceDiv.innerHTML = `<strong>Current Price:</strong><span>$${item.product_price || 'N/A'}</span>`;
+    let priceDisplay = 'N/A';
+    const priceVal = item.price !== undefined ? item.price : item.product_price;
+    if (typeof priceVal === 'number') {
+        priceDisplay = `$${priceVal.toFixed(2)}`;
+    } else if (priceVal) {
+        let cleanPrice = String(priceVal).replace(/^\$/, '').trim();
+        if (!isNaN(parseFloat(cleanPrice))) {
+            priceDisplay = `$${parseFloat(cleanPrice).toFixed(2)}`;
+        } else {
+            priceDisplay = priceVal;
+        }
+    }
+    currentPriceDiv.innerHTML = `<strong>Current Price:</strong><span>${priceDisplay}</span>`;
     priceGrid.appendChild(currentPriceDiv);
     
-    // Original Price
+    // Original Price (rich format only)
     if (item.product_original_price) {
         const origPriceDiv = document.createElement('div');
         origPriceDiv.className = 'detail-item';
@@ -711,7 +968,7 @@ function showAmazonDetails(item) {
         priceGrid.appendChild(origPriceDiv);
     }
     
-    // Prime Status
+    // Prime Status (rich format only)
     if (item.is_prime) {
         const primeDiv = document.createElement('div');
         primeDiv.className = 'detail-item';
@@ -722,17 +979,48 @@ function showAmazonDetails(item) {
     priceSection.appendChild(priceGrid);
     body.appendChild(priceSection);
     
-    // Reviews & Availability Combined
+    // Item Details Section
     const detailsSection = createDetailSection('Item Details');
     const detailsGrid = document.createElement('div');
     detailsGrid.className = 'detail-grid';
     
-    // Rating
-    if (item.product_star_rating) {
+    // Star rating - handle both formats
+    const starRating = item.star_rating || item.product_star_rating;
+    if (starRating) {
         const ratingDiv = document.createElement('div');
         ratingDiv.className = 'detail-item';
-        ratingDiv.innerHTML = `<strong>⭐ Rating:</strong><span>${item.product_star_rating} stars</span>`;
+        ratingDiv.innerHTML = `<strong>⭐ Rating:</strong><span>${starRating} stars</span>`;
         detailsGrid.appendChild(ratingDiv);
+    }
+    
+    // ASIN - extract from URL if not directly available
+    let asin = item.asin;
+    if (!asin) {
+        const productUrl = item.url || item.product_url || '';
+        const asinMatch = productUrl.match(/\/dp\/([A-Z0-9]{10})/i) || productUrl.match(/\/product\/([A-Z0-9]{10})/i);
+        if (asinMatch) {
+            asin = asinMatch[1];
+        }
+    }
+    if (asin) {
+        const asinDiv = document.createElement('div');
+        asinDiv.className = 'detail-item';
+        asinDiv.innerHTML = `<strong>ASIN:</strong><span>${asin}</span>`;
+        detailsGrid.appendChild(asinDiv);
+    }
+    
+    // Availability / In Stock
+    if (item.product_availability) {
+        const availDiv = document.createElement('div');
+        availDiv.className = 'detail-item';
+        availDiv.innerHTML = `<strong>Availability:</strong><span>${item.product_availability}</span>`;
+        detailsGrid.appendChild(availDiv);
+    } else if (item.sales_volume) {
+        // Use sales volume as proxy for stock status
+        const availDiv = document.createElement('div');
+        availDiv.className = 'detail-item';
+        availDiv.innerHTML = `<strong>Sales:</strong><span>${item.sales_volume}</span>`;
+        detailsGrid.appendChild(availDiv);
     }
     
     // Reviews Count
@@ -743,46 +1031,67 @@ function showAmazonDetails(item) {
         detailsGrid.appendChild(reviewsDiv);
     }
     
-    // Availability
-    const availDiv = document.createElement('div');
-    availDiv.className = 'detail-item';
-    availDiv.innerHTML = `<strong>In Stock:</strong><span>${item.product_availability || 'N/A'}</span>`;
-    detailsGrid.appendChild(availDiv);
-    
-    // ASIN
-    const asinDiv = document.createElement('div');
-    asinDiv.className = 'detail-item';
-    asinDiv.innerHTML = `<strong>ASIN:</strong><span>${item.asin || 'N/A'}</span>`;
-    detailsGrid.appendChild(asinDiv);
-    
     detailsSection.appendChild(detailsGrid);
     body.appendChild(detailsSection);
     
-    // Delivery
-    if (item.product_delivery_info) {
-        const deliverySection = createDetailSection('Delivery Information');
-        const deliveryGrid = document.createElement('div');
-        deliveryGrid.className = 'detail-grid';
-        
-        const parsed = parseDeliveryInfo(item.product_delivery_info);
-        
-        // Shipping Cost
-        const costDiv = document.createElement('div');
-        costDiv.className = 'detail-item';
-        costDiv.innerHTML = `<strong>🚚 Shipping Cost:</strong><span>${parsed.cost || 'N/A'}</span>`;
-        deliveryGrid.appendChild(costDiv);
-        
-        // Delivery Date
-        if (parsed.dates) {
-            const datesDiv = document.createElement('div');
-            datesDiv.className = 'detail-item';
-            datesDiv.innerHTML = `<strong>📅 Estimated Arrival:</strong><span>${parsed.dates}</span>`;
-            deliveryGrid.appendChild(datesDiv);
+    // Delivery & Shipping Section (single unified section)
+    const deliverySection = createDetailSection('Shipping & Delivery');
+    const deliveryGrid = document.createElement('div');
+    deliveryGrid.className = 'detail-grid';
+    
+    // Determine best delivery date to show (avoid duplicates)
+    let deliveryDate = null;
+    if (item.product_delivery_info && typeof item.product_delivery_info === 'object') {
+        deliveryDate = item.product_delivery_info.minDelivery;
+    } else if (item.min_delivery_date) {
+        deliveryDate = item.min_delivery_date;
+    }
+    
+    if (deliveryDate) {
+        const datesDiv = document.createElement('div');
+        datesDiv.className = 'detail-item';
+        const formattedDate = formatDeliveryDate(deliveryDate);
+        datesDiv.innerHTML = `<strong>📅 Estimated Arrival:</strong><span>${formattedDate}</span>`;
+        deliveryGrid.appendChild(datesDiv);
+    }
+    
+    // Show max delivery date if different from min
+    if (item.product_delivery_info && typeof item.product_delivery_info === 'object') {
+        const maxDelivery = item.product_delivery_info.maxDelivery;
+        if (maxDelivery && maxDelivery !== deliveryDate) {
+            const maxDiv = document.createElement('div');
+            maxDiv.className = 'detail-item';
+            const formattedMax = formatDeliveryDate(maxDelivery);
+            maxDiv.innerHTML = `<strong>📅 Latest Arrival:</strong><span>${formattedMax}</span>`;
+            deliveryGrid.appendChild(maxDiv);
         }
-        
+    }
+    
+    // Shipping cost info (if Prime shows free, otherwise check raw delivery string)
+    if (item.is_prime) {
+        const shippingDiv = document.createElement('div');
+        shippingDiv.className = 'detail-item';
+        shippingDiv.innerHTML = `<strong>🚚 Shipping:</strong><span>FREE (Prime)</span>`;
+        deliveryGrid.appendChild(shippingDiv);
+    }
+    
+    if (deliveryGrid.children.length > 0) {
         deliverySection.appendChild(deliveryGrid);
         body.appendChild(deliverySection);
     }
+    
+    // View on Amazon button
+    const actionsSection = document.createElement('div');
+    actionsSection.style.marginTop = '20px';
+    actionsSection.style.textAlign = 'center';
+    
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-link';
+    viewBtn.textContent = '🔗 View on Amazon';
+    viewBtn.style.padding = '12px 24px';
+    viewBtn.onclick = () => window.open(item.url || item.product_url, '_blank');
+    actionsSection.appendChild(viewBtn);
+    body.appendChild(actionsSection);
     
     document.body.appendChild(modal);
     modal.style.display = 'block';

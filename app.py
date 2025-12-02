@@ -3,8 +3,7 @@ Flask web application for eBay and Amazon product search
 """
 
 from flask import Flask, render_template, request, jsonify
-from EbayAPI.ebay_call import search_ebay, display_results as ebay_display_results
-from RapidAmazon.rapidapi_amazon import search_amazon
+from int2 import integrated_API
 from RecommendationAlgorithm.simple_nlp import SimpleNLPExtractor
 
 app = Flask(__name__)
@@ -21,14 +20,14 @@ def index():
 
 @app.route('/search', methods=['POST'])
 def search():
-    """Handle search requests from the frontend"""
+    """Handle search requests from the frontend - uses integrated API with LLM recommendations"""
     try:
         # Get search parameters from request
         data = request.json
         product = data.get('product', '')
-        min_price = data.get('min_price', '')
-        max_price = data.get('max_price', '')
-        condition = data.get('condition', '')
+        min_price = data.get('min_price', '') or None
+        max_price = data.get('max_price', '') or None
+        condition = data.get('condition', '') or None
         sort_by = data.get('sort_by', 'price')
         amazon_sort = data.get('amazon_sort', 'RELEVANCE')
         
@@ -44,73 +43,32 @@ def search():
         delivery_days = data.get('delivery_days', '')
         guaranteed_days = int(delivery_days) if delivery_days else None
         
-        ebay_items = []
-        amazon_items = []
-        ebay_error = None
-        amazon_error = None
-        
-        # Search eBay
-        try:
-            price_range = None
-            if min_price or max_price:
-                price_range = f"{min_price or ''}..{max_price or ''}"
-            
-            ebay_results = search_ebay(
-                query=product,
-                price_range=price_range,
-                condition_filter=condition if condition else None,
-                delivery_country=country,
-                delivery_postal_code=postal,
-                guaranteed_delivery_days=guaranteed_days,
-                max_delivery_cost=max_ship_cost,
-                sort_by=sort_by
-            )
-            
-            if ebay_results:
-                formatted = ebay_display_results(ebay_results)
-                ebay_items = formatted.get("items", [])[:5]  # Limit to 5
-        except Exception as e:
-            ebay_error = str(e)
-            print(f"eBay search error: {e}")
-        
-        # Search Amazon
-        try:
-            amazon_min_price = int(float(min_price)) if min_price else None
-            amazon_max_price = int(float(max_price)) if max_price else None
-            
-            amazon_results = search_amazon(
-                query=product,
-                min_price=amazon_min_price,
-                max_price=amazon_max_price,
-                sort_by=amazon_sort if amazon_sort != "RELEVANCE" else None
-            )
-            
-            if amazon_results:
-                if "error" in amazon_results:
-                    amazon_error = amazon_results['error']
-                elif "products" in amazon_results:
-                    # Filter out products without prices and limit to 5
-                    all_products = amazon_results.get("products", [])
-                    amazon_items = [p for p in all_products if p.get('product_price') is not None][:5]
-        except Exception as e:
-            amazon_error = str(e)
-            print(f"Amazon search error: {e}")
+        # Call the integrated API which uses LLM for similar recommendations
+        result = integrated_API(
+            product_name=product,
+            min_price=min_price,
+            max_price=max_price,
+            condition_filter=condition,
+            ebay_sort=sort_by,
+            delivery_country=country,
+            delivery_postal=postal,
+            max_ship_cost=max_ship_cost,
+            guaranteed_days=guaranteed_days,
+            amazon_sort=amazon_sort if amazon_sort != "RELEVANCE" else None,
+            comparison_criteria='price'
+        )
         
         return jsonify({
             'success': True,
-            'ebay': {
-                'items': ebay_items,
-                'count': len(ebay_items),
-                'error': ebay_error
-            },
-            'amazon': {
-                'items': amazon_items,
-                'count': len(amazon_items),
-                'error': amazon_error
-            }
+            'search_query': result.get('search_query', product),
+            'filters': result.get('filters', {}),
+            'products': result.get('products', []),
+            'total_count': len(result.get('products', []))
         })
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -135,50 +93,15 @@ def chat_search():
         max_price = extracted['max_price']
         metadata = extracted['metadata']
         
-        ebay_items = []
-        amazon_items = []
-        ebay_error = None
-        amazon_error = None
-        
-        # Search eBay
-        try:
-            price_range = None
-            if min_price or max_price:
-                price_range = f"{min_price or ''}..{max_price or ''}"
-            
-            ebay_results = search_ebay(
-                query=product,
-                price_range=price_range,
-                condition_filter=None,
-                sort_by='price'
-            )
-            
-            if ebay_results:
-                formatted = ebay_display_results(ebay_results)
-                ebay_items = formatted.get("items", [])[:5]
-        except Exception as e:
-            ebay_error = str(e)
-            print(f"eBay chat search error: {e}")
-        
-        # Search Amazon
-        try:
-            amazon_results = search_amazon(
-                query=product,
-                min_price=min_price,
-                max_price=max_price,
-                sort_by=None
-            )
-            
-            if amazon_results:
-                if "error" in amazon_results:
-                    amazon_error = amazon_results['error']
-                elif "products" in amazon_results:
-                    # Filter out products without prices and limit to 5
-                    all_products = amazon_results.get("products", [])
-                    amazon_items = [p for p in all_products if p.get('product_price') is not None][:5]
-        except Exception as e:
-            amazon_error = str(e)
-            print(f"Amazon chat search error: {e}")
+        # Call the integrated API which uses LLM for similar recommendations
+        result = integrated_API(
+            product_name=product,
+            min_price=str(min_price) if min_price else None,
+            max_price=str(max_price) if max_price else None,
+            condition_filter=None,
+            ebay_sort='price',
+            comparison_criteria='price'
+        )
         
         return jsonify({
             'success': True,
@@ -188,19 +111,15 @@ def chat_search():
                 'max_price': max_price,
                 'metadata': metadata
             },
-            'ebay': {
-                'items': ebay_items,
-                'count': len(ebay_items),
-                'error': ebay_error
-            },
-            'amazon': {
-                'items': amazon_items,
-                'count': len(amazon_items),
-                'error': amazon_error
-            }
+            'search_query': result.get('search_query', product),
+            'filters': result.get('filters', {}),
+            'products': result.get('products', []),
+            'total_count': len(result.get('products', []))
         })
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)

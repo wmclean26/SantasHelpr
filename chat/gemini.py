@@ -48,10 +48,3 @@ def get_similar_gift_ideas(gift_name: str, num_ideas: int = 2):
     ideas = [i.strip(" -*") for i in ideas if i.strip()]
     
     return ideas[:num_ideas] if ideas else ["(no ideas found)"]
-
-
-def main():
-    print(get_similar_gift_ideas("power rangers"))
-
-if __name__ == "__main__":
-    main()

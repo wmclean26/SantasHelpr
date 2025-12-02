@@ -22,6 +22,7 @@ def quality_score(product):
         elif 'used' in condition:
             return 0.5
         return 0.0
+        
     elif product['source'] == 'Amazon':
         rating_str = product.get('star_rating')
         if rating_str:
@@ -63,13 +64,24 @@ def compare(json_data, sort_by, top_n=3, ensure_both_sources=True):
                 except:
                     pass
             
+            # Preserve ALL original eBay fields plus add source and parsed price
             product_info = {
                 'source': 'eBay',
                 'title': item.get('title'),
                 'price': parse_price(item.get('price')),
                 'condition': item.get('condition'),
                 'url': item.get('url'),
-                'min_delivery_date': min_delivery_date
+                'min_delivery_date': min_delivery_date,
+                # Preserve all original fields
+                'description': item.get('description'),
+                'images': item.get('images', []),
+                'market_price': item.get('market_price', {}),
+                'categories': item.get('categories', []),
+                'itemLocation': item.get('itemLocation'),
+                'shippingOptions': item.get('shippingOptions', []),
+                'seller_feedbackPercentage': item.get('seller_feedbackPercentage'),
+                'watchCount': item.get('watchCount'),
+                'itemCreationDate': item.get('itemCreationDate')
             }
             all_products.append(product_info)
 
@@ -87,6 +99,7 @@ def compare(json_data, sort_by, top_n=3, ensure_both_sources=True):
                 except:
                     pass
             
+            # Preserve ALL original Amazon fields plus add source and parsed price
             product_info = {
                 'source': 'Amazon',
                 'title': product.get('product_title'),
@@ -94,7 +107,21 @@ def compare(json_data, sort_by, top_n=3, ensure_both_sources=True):
                 'star_rating': product.get('product_star_rating'),
                 'url': product.get('product_url'),
                 'image': product.get('product_photo'),
-                'min_delivery_date': min_delivery_date
+                'min_delivery_date': min_delivery_date,
+                # Preserve all original fields
+                'product_title': product.get('product_title'),
+                'product_price': product.get('product_price'),
+                'product_photo': product.get('product_photo'),
+                'product_star_rating': product.get('product_star_rating'),
+                'product_url': product.get('product_url'),
+                'is_prime': product.get('is_prime'),
+                'product_original_price': product.get('product_original_price'),
+                'product_delivery_info': product.get('product_delivery_info'),
+                # Additional fields
+                'asin': product.get('asin'),
+                'sales_volume': product.get('sales_volume'),
+                'product_availability': product.get('product_availability'),
+                'product_num_ratings': product.get('product_num_ratings')
             }
             all_products.append(product_info)
 
