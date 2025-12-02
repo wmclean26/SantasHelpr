@@ -1,7 +1,7 @@
 from EbayAPI.ebay_call import search_ebay, display_results as ebay_display_results
 from RapidAmazon.rapidapi_amazon import search_amazon, filter_product_data
-from chat.gemini import get_similar_gift_ideas
-from OutputParser.parse_products import compare  # Import the compare function
+from Gemini.gemini import get_similar_gift_ideas
+from ProductFiltering.parse_products import compare  # Import the compare function
 import json
 import traceback
 
