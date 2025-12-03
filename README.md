@@ -11,8 +11,9 @@ Santa's Helpr is a Python-based application that helps users find the perfect gi
 - **Gift Recommendation:** Suggests gifts based on user input.
 - **Gift Ranking:** Returns a different set of potential gifts based off of user parameters including priority for delivery date, price, and quality. 
 - **Multi-API Integration:** Fetches product data from Gemini, eBay, and Amazon (third party key from RapidAPI).
-- **Keyword Extraction:** Utilizes NLP techniques to extract relevant keywords from user input and uses it to return appropiate gift.
+- **Keyword Extraction:** Utilizes NLP techniques to extract relevant keywords from user input and uses them to return an appropriate gift.
 - **Web Interface:** An aesthetically pleasing web interface to interact with the application with a nostalgic, Christmas feel.
+- **Related Items** Uses AI to get 2 similar gift ideas for more versatility
 
 ## How to Run
 
