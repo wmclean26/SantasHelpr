@@ -30,7 +30,7 @@ Santa's Helpr is a Python-based application that helps users find the perfect gi
    ```
 3. **Configure API keys:**
    - Create a `config.ini` file from the `config.ini.example`.
-   - Add your API keys for eBay and RapidAPI (for Amazon).
+   - Add your API keys for eBay, RapidAPI (for Amazon), and Gemini.
 4. **Run the application:**
    ```bash
    python app.py
